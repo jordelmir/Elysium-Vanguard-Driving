@@ -1,29 +1,55 @@
 {
   "expo": {
-    "name": "RutaLibre",
-    "slug": "RutaLibre",
+    "name": "Elysium Vanguard Driving",
+    "slug": "elysium-vanguard-driving",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0d1117"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elysiumvanguard.driving",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Elysium Vanguard Driving necesita tu ubicación para conectarte con choferes cercanos.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Elysium Vanguard Driving necesita tu ubicación para el seguimiento de viajes."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0d1117",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.elysiumvanguard.driving",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Elysium Vanguard Driving necesita tu ubicación para el servicio de transporte."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "94881e64-8e05-401a-9477-e766aef5e272"
+      }
     }
   }
 }

@@ -1,0 +1,74 @@
+// Pricing engine for Elysium Vanguard Driving
+// Costa Rica Colones (₡)
+
+const BASE_FARE = 500;      // ₡500 tarifa base
+const PER_KM = 350;         // ₡350 por kilómetro
+const PER_MINUTE = 50;      // ₡50 por minuto estimado
+const MIN_FARE = 1000;      // ₡1,000 tarifa mínima
+const COMMISSION_RATE = 0.01; // 1% comisión de la plataforma
+
+/**
+ * Calculate suggested price based on distance
+ * @param {number} distanceKm - distance in kilometers
+ * @returns {object} pricing breakdown
+ */
+export function calculateSuggestedPrice(distanceKm) {
+    // Estimate time: average 30km/h in city → minutes = (distance / 30) * 60
+    const estimatedMinutes = Math.round((distanceKm / 30) * 60);
+
+    const distanceCost = Math.round(distanceKm * PER_KM);
+    const timeCost = Math.round(estimatedMinutes * PER_MINUTE);
+    const subtotal = BASE_FARE + distanceCost + timeCost;
+    const total = Math.max(subtotal, MIN_FARE);
+
+    // Round to nearest 100 colones
+    const roundedTotal = Math.round(total / 100) * 100;
+
+    return {
+        baseFare: BASE_FARE,
+        distanceCost,
+        timeCost,
+        distanceKm: Math.round(distanceKm * 10) / 10,
+        estimatedMinutes,
+        suggestedPrice: roundedTotal,
+    };
+}
+
+/**
+ * Calculate commission split
+ * @param {number} acceptedPrice - final price accepted by both parties
+ * @returns {object} commission breakdown
+ */
+export function calculateCommission(acceptedPrice) {
+    const commission = Math.round(acceptedPrice * COMMISSION_RATE);
+    const driverEarns = acceptedPrice - commission;
+
+    return {
+        totalPrice: acceptedPrice,
+        commission,
+        commissionRate: `${COMMISSION_RATE * 100}%`,
+        driverEarns,
+    };
+}
+
+/**
+ * Format price in Costa Rican Colones
+ */
+export function formatPrice(amount) {
+    return `₡${amount.toLocaleString('es-CR')}`;
+}
+
+/**
+ * Generate price suggestions around a base price
+ * @returns {array} array of 3 price options [lower, suggested, higher]
+ */
+export function generatePriceSuggestions(suggestedPrice) {
+    const lower = Math.round((suggestedPrice * 0.85) / 100) * 100;
+    const higher = Math.round((suggestedPrice * 1.15) / 100) * 100;
+
+    return [
+        { label: 'Económico', price: Math.max(lower, MIN_FARE) },
+        { label: 'Recomendado', price: suggestedPrice },
+        { label: 'Premium', price: higher },
+    ];
+}
