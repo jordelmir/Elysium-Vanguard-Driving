@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, Dimensions,
-    StatusBar, TextInput, Modal, Alert, Animated, Platform, ScrollView
+    StatusBar, TextInput, Modal, Alert, Animated, Platform, ScrollView,
+    KeyboardAvoidingView
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
@@ -363,9 +364,7 @@ export default function RiderDashboard({ navigation }) {
                                     icon: '🏁',
                                     size: [32, 32],
                                 }] : []),
-                                size: [32, 32],
-                            }))
-                        ]}
+                            ]}
                         mapShapes={routeCoordinates.length > 0 ? [{
                             shapeType: 'Polyline',
                             color: COLORS.accent,
@@ -987,6 +986,14 @@ const styles = StyleSheet.create({
     priceChipActive: {
         borderColor: COLORS.accent,
         backgroundColor: COLORS.accent + '11',
+    },
+    priceChipText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    priceChipTextActive: {
+        color: COLORS.accent,
     },
     customPriceRow: {
         flexDirection: 'row',
