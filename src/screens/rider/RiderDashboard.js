@@ -43,6 +43,7 @@ export default function RiderDashboard({ navigation }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
+    const [mapZoom, setMapZoom] = useState(14);
     const [routeCoordinates, setRouteCoordinates] = useState([]);
     const progressAnim = useRef(new Animated.Value(0)).current;
 
