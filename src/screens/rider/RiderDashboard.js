@@ -19,8 +19,6 @@ import { scale, moderateScale, SCREEN_WIDTH, SCREEN_HEIGHT, DEVICE_SIZE } from '
 
 const { width, height } = Dimensions.get('window');
 
-// OSM default style doesn't have a direct dark mode via URL easily without registration,
-// but we can use CartoDB Dark Matter tiles which are free and don't require API keys.
 export const CARTO_DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
 export default function RiderDashboard({ navigation }) {
@@ -45,23 +43,18 @@ export default function RiderDashboard({ navigation }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
-    const [mapRegion, setMapRegion] = useState(null);
 
-    // Get current location and watch for changes
     useEffect(() => {
         let subscription;
         (async () => {
             try {
-                // Initial location for fast map rendering
                 const loc = await getCurrentLocation();
                 setMyLocation(loc);
                 const addr = await reverseGeocode(loc.latitude, loc.longitude);
                 setPickupName(addr);
 
-                // Continuous watching for high precision
                 subscription = await watchLocation(async (newLoc) => {
                     setMyLocation(prev => {
-                        // Only update address if moved significantly (> 10m)
                         if (!prev || calculateDistance(prev.latitude, prev.longitude, newLoc.latitude, newLoc.longitude) > 0.01) {
                             reverseGeocode(newLoc.latitude, newLoc.longitude).then(setPickupName);
                         }
@@ -79,7 +72,6 @@ export default function RiderDashboard({ navigation }) {
         };
     }, []);
 
-    // Listen for online drivers
     useEffect(() => {
         const q = query(collection(db, 'drivers'), where('isOnline', '==', true));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -95,7 +87,6 @@ export default function RiderDashboard({ navigation }) {
         return unsubscribe;
     }, []);
 
-    // Handle map movement for Map Picker
     const handleMapMessage = async (message) => {
         if (message.event === 'onMapClicked') {
             if (showPanel && !isMapPickerMode) {
@@ -138,7 +129,6 @@ export default function RiderDashboard({ navigation }) {
         }
     };
 
-    // Search logic
     useEffect(() => {
         const delaySearch = setTimeout(async () => {
             if (searchQuery.length >= 3) {
@@ -160,14 +150,12 @@ export default function RiderDashboard({ navigation }) {
         setSearchQuery('');
         setSearchResults([]);
 
-        // Animate map to destination
         if (mapRef.current) {
             mapRef.current.injectJavaScript(`
                 window.map.flyTo([${item.latitude}, ${item.longitude}], 16);
             `);
         }
 
-        // Update pricing
         if (myLocation) {
             const dist = calculateDistance(
                 myLocation.latitude, myLocation.longitude,
@@ -187,7 +175,6 @@ export default function RiderDashboard({ navigation }) {
         if (!showPanel) togglePanel();
     };
 
-    // Toggle request panel
     const togglePanel = () => {
         const toValue = showPanel ? 0 : 1;
         Animated.spring(slideAnim, {
@@ -199,7 +186,6 @@ export default function RiderDashboard({ navigation }) {
         setShowPanel(!showPanel);
     };
 
-    // Send ride request
     const sendRideRequest = async () => {
         if (!destination) {
             Alert.alert('Error', 'Selecciona un destino tocando el mapa');
@@ -240,7 +226,6 @@ export default function RiderDashboard({ navigation }) {
 
             const rideRef = await addDoc(collection(db, 'rides'), rideData);
 
-            // Listen for ride acceptance
             const unsubscribe = onSnapshot(rideRef, (doc) => {
                 const data = doc.data();
                 if (data?.status === 'accepted') {
@@ -269,7 +254,6 @@ export default function RiderDashboard({ navigation }) {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            {/* Map */}
             {myLocation && (
                 <View style={styles.map}>
                     <LeafletView
@@ -281,7 +265,7 @@ export default function RiderDashboard({ navigation }) {
                                 baseLayerName: 'CartoDB Dark Matter',
                                 baseLayerIsActive: true,
                                 url: CARTO_DARK_TILES,
-                                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
                             }
                         ]}
                         mapCenterPosition={{
@@ -290,21 +274,18 @@ export default function RiderDashboard({ navigation }) {
                         }}
                         zoom={14}
                         mapMarkers={[
-                            // User location marker
                             {
                                 id: 'user-loc',
                                 position: { lat: myLocation.latitude, lng: myLocation.longitude },
                                 icon: '📍',
                                 size: [32, 32],
                             },
-                            // Destination marker
                             ...(destination ? [{
                                 id: 'destination',
                                 position: { lat: destination.latitude, lng: destination.longitude },
                                 icon: '🏁',
                                 size: [32, 32],
                             }] : []),
-                            // Drivers
                             ...drivers.map(d => ({
                                 id: `drv-${d.id}`,
                                 position: { lat: d.location.latitude, lng: d.location.longitude },
@@ -316,10 +297,9 @@ export default function RiderDashboard({ navigation }) {
                 </View>
             )}
 
-            {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchInputWrapper}>
-                    <Text style={styles.searchIcon}>🔍</Text>
+                    <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
                     <TextInput
                         style={styles.searchInput}
                         placeholder="¿A dónde vamos?"
@@ -336,7 +316,6 @@ export default function RiderDashboard({ navigation }) {
 
                 {searchResults.length > 0 && (
                     <View style={styles.resultsContainer}>
-                        {/* Summary Info */}
                         <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
                             <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
                             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
@@ -363,11 +342,10 @@ export default function RiderDashboard({ navigation }) {
                 )}
             </View>
 
-            <TouchableOpacity style={styles.menuBtn} onPress={() => setShowMenu(true)}>
+            <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)}>
                 <Text style={styles.menuIcon}>☰</Text>
             </TouchableOpacity>
 
-            {/* Map Picker UI Updates */}
             {isMapPickerMode && (
                 <>
                     <View style={styles.mapPickerContainer} pointerEvents="none">
@@ -379,7 +357,6 @@ export default function RiderDashboard({ navigation }) {
                         </View>
                     </View>
 
-                    {/* Real-time Metrics Info Box */}
                     <View style={styles.pickerMetricsBox}>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricEmoji}>📏</Text>
@@ -395,26 +372,23 @@ export default function RiderDashboard({ navigation }) {
                             </Text>
                         </View>
                     </View>
+
+                    <TouchableOpacity
+                        style={styles.confirmMapPicker}
+                        onPress={async () => {
+                            setIsMapPickerMode(false);
+                            const details = await getPlaceDetails(destination.latitude, destination.longitude);
+                            setDestinationName(details.address);
+                            if (!showPanel) togglePanel();
+                        }}
+                    >
+                        <Text style={styles.confirmMapPickerText}>Confirmar Destino</Text>
+                    </TouchableOpacity>
                 </>
             )}
 
-            {isMapPickerMode && (
-                <TouchableOpacity
-                    style={styles.confirmMapPicker}
-                    onPress={async () => {
-                        setIsMapPickerMode(false);
-                        const details = await getPlaceDetails(destination.latitude, destination.longitude);
-                        setDestinationName(details.address);
-                        if (!showPanel) togglePanel();
-                    }}
-                >
-                    <Text style={styles.confirmMapPickerText}>Confirmar Destino</Text>
-                </TouchableOpacity>
-            )}
-
-            {/* Bottom action button */}
             <View style={styles.bottomSection}>
-                {!showPanel ? (
+                {!showPanel && !isMapPickerMode ? (
                     <TouchableOpacity
                         style={styles.whereToBtn}
                         onPress={togglePanel}
@@ -426,7 +400,6 @@ export default function RiderDashboard({ navigation }) {
                     </TouchableOpacity>
                 ) : null}
 
-                {/* Recenter Button */}
                 {!showPanel && (
                     <TouchableOpacity
                         style={styles.recenterButton}
@@ -435,10 +408,9 @@ export default function RiderDashboard({ navigation }) {
                                 const loc = await getCurrentLocation();
                                 setMyLocation(loc);
                                 if (mapRef.current) {
-                                    // We call a custom script on the LeafletView to recenter
                                     mapRef.current.injectJavaScript(`
-                                    window.map.setView([${loc.latitude}, ${loc.longitude}], 16);
-                                `);
+                                        window.map.setView([${loc.latitude}, ${loc.longitude}], 16);
+                                    `);
                                 }
                                 const addr = await reverseGeocode(loc.latitude, loc.longitude);
                                 setPickupName(addr);
@@ -451,14 +423,12 @@ export default function RiderDashboard({ navigation }) {
                     </TouchableOpacity>
                 )}
 
-                {/* Request Panel */}
                 <Animated.View
                     style={[
                         styles.requestPanel,
                         { transform: [{ translateY: panelTranslateY }] },
                     ]}
                 >
-                    {/* Pickup */}
                     <View style={styles.locationRow}>
                         <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
                         <View style={styles.locationInfo}>
@@ -467,7 +437,6 @@ export default function RiderDashboard({ navigation }) {
                         </View>
                     </View>
 
-                    {/* Destination */}
                     <View style={styles.locationRow}>
                         <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
                         <View style={styles.locationInfo}>
@@ -483,16 +452,15 @@ export default function RiderDashboard({ navigation }) {
                         </View>
                     </View>
 
-                    {/* Price suggestions */}
                     {priceSuggestions.length > 0 && (
                         <View style={styles.priceSection}>
                             <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
-                            <View style={styles.priceSuggestions}>
+                            <View style={styles.priceGrid}>
                                 {priceSuggestions.map((item, index) => (
                                     <TouchableOpacity
                                         key={index}
                                         style={[
-                                            styles.priceChip,
+                                            styles.priceSuggestion,
                                             selectedPrice === item.price && styles.priceChipActive,
                                         ]}
                                         onPress={() => {
@@ -501,22 +469,15 @@ export default function RiderDashboard({ navigation }) {
                                         }}
                                     >
                                         <Text style={[
-                                            styles.priceChipLabel,
-                                            selectedPrice === item.price && styles.priceChipLabelActive,
+                                            styles.priceText,
+                                            selectedPrice === item.price && { color: COLORS.accent },
                                         ]}>
-                                            {item.label}
-                                        </Text>
-                                        <Text style={[
-                                            styles.priceChipPrice,
-                                            selectedPrice === item.price && styles.priceChipPriceActive,
-                                        ]}>
-                                            {formatPrice(item.price)}
+                                            {item.label} ({formatPrice(item.price)})
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
 
-                            {/* Custom price input */}
                             <View style={styles.customPriceRow}>
                                 <Text style={styles.currencySymbol}>₡</Text>
                                 <TextInput
@@ -531,31 +492,23 @@ export default function RiderDashboard({ navigation }) {
                         </View>
                     )}
 
-                    {/* Payment method */}
                     <View style={styles.paymentRow}>
                         <TouchableOpacity
                             style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
                             onPress={() => setPaymentMethod('cash')}
                         >
                             <Text style={styles.paymentEmoji}>💵</Text>
-                            <Text style={[
-                                styles.paymentText,
-                                paymentMethod === 'cash' && styles.paymentTextActive
-                            ]}>Efectivo</Text>
+                            <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
                             onPress={() => setPaymentMethod('sinpe')}
                         >
                             <Text style={styles.paymentEmoji}>📱</Text>
-                            <Text style={[
-                                styles.paymentText,
-                                paymentMethod === 'sinpe' && styles.paymentTextActive
-                            ]}>SINPE</Text>
+                            <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* Send request */}
                     <View style={styles.actionRow}>
                         <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
                             <Text style={styles.cancelBtnText}>✕</Text>
@@ -574,46 +527,35 @@ export default function RiderDashboard({ navigation }) {
                 </Animated.View>
             </View>
 
-            {/* Side Menu */}
-            <Modal
-                visible={showMenu}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setShowMenu(false)}
-            >
-                <TouchableOpacity
-                    style={styles.menuOverlay}
-                    activeOpacity={1}
-                    onPress={() => setShowMenu(false)}
-                >
+            <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+                <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
                     <View style={styles.menuContent}>
                         <View style={styles.menuHeader}>
-                            <Text style={styles.menuAvatar}>👤</Text>
-                            <Text style={styles.menuName}>{userData?.name || 'Usuario'}</Text>
-                            <Text style={styles.menuRole}>Pasajero</Text>
+                            <View style={styles.userAvatarLarge}>
+                                <Text style={{ fontSize: 40 }}>👤</Text>
+                            </View>
+                            <Text style={styles.menuUserName}>{userData?.name || 'Usuario'}</Text>
+                            <View style={styles.ratingBadgeContainer}>
+                                <Text style={styles.ratingPercent}>
+                                    ⭐ {calculateRatingPercentage(userData?.rating || 5.0)}
+                                </Text>
+                                <View style={styles.recommendedBadge}>
+                                    <Text style={styles.recommendedText}>¡Pasajero Recomendado!</Text>
+                                </View>
+                            </View>
                         </View>
-
                         <TouchableOpacity style={styles.menuItem}>
                             <Text style={styles.menuItemIcon}>📋</Text>
                             <Text style={styles.menuItemText}>Mis viajes</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemIcon}>⭐</Text>
-                            <Text style={styles.menuItemText}>Calificación: {userData?.rating || 5.0}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemIcon}>⚙️</Text>
-                            <Text style={styles.menuItemText}>Configuración</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
-                            <Text style={styles.logoutText}>Cerrar sesión</Text>
+                        <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                            <Text style={styles.menuItemIcon}>🚪</Text>
+                            <Text style={styles.menuItemText}>Cerrar sesión</Text>
                         </TouchableOpacity>
                     </View>
                 </TouchableOpacity>
             </Modal>
 
-            {/* Searching Overlay */}
             {rideStatus === 'searching' && (
                 <View style={styles.searchingOverlay}>
                     <View style={styles.searchingCard}>
@@ -622,11 +564,7 @@ export default function RiderDashboard({ navigation }) {
                         </View>
                         <Text style={styles.searchingTitle}>Buscando Conductores</Text>
                         <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard...</Text>
-
-                        <TouchableOpacity
-                            style={styles.cancelRequestBtn}
-                            onPress={() => setRideStatus(null)}
-                        >
+                        <TouchableOpacity style={styles.cancelRequestBtn} onPress={() => setRideStatus(null)}>
                             <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
                         </TouchableOpacity>
                     </View>
@@ -644,72 +582,134 @@ const styles = StyleSheet.create({
     map: {
         ...StyleSheet.absoluteFillObject,
     },
-    driverMarker: {
-        backgroundColor: COLORS.bgCard,
-        borderRadius: 20,
-        padding: 6,
-        borderWidth: 2,
-        borderColor: COLORS.mapDriver,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    driverMarkerText: {
-        fontSize: 20,
-    },
-    destMarker: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-    },
-    destMarkerText: {
-        fontSize: 28,
-    },
-    topBar: {
+    menuButton: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 50 : 40,
+        top: Platform.OS === 'ios' ? 55 : 35,
         left: SPACING.md,
-        right: SPACING.md,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    menuBtn: {
-        backgroundColor: COLORS.bgOverlay,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        zIndex: 110,
+        backgroundColor: COLORS.bgCard,
+        width: scale(45),
+        height: scale(45),
+        borderRadius: scale(22.5),
         justifyContent: 'center',
         alignItems: 'center',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.accent + '44',
     },
     menuIcon: {
-        fontSize: 20,
-        color: COLORS.textPrimary,
+        fontSize: moderateScale(20),
+        color: COLORS.accent,
     },
-    earningsBadge: {
-        backgroundColor: COLORS.bgOverlay,
+    recenterButton: {
+        position: 'absolute',
+        bottom: 100,
+        right: SPACING.md,
+        backgroundColor: COLORS.bgCard,
+        width: scale(50),
+        height: scale(50),
+        borderRadius: scale(25),
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        borderWidth: 1,
+        borderColor: COLORS.accent + '44',
+    },
+    searchContainer: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 55 : 35,
+        left: scale(70),
+        right: SPACING.md,
+        zIndex: 100,
+    },
+    searchInputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
         paddingHorizontal: SPACING.md,
-        paddingVertical: 10,
-        borderRadius: RADIUS.full,
+        paddingVertical: scale(10),
         borderWidth: 1,
         borderColor: COLORS.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 6,
     },
-    earningsText: {
-        fontSize: FONTS.sizes.md,
-        fontWeight: '700',
+    searchInput: {
+        flex: 1,
+        fontSize: moderateScale(15),
+        color: COLORS.textPrimary,
+        fontWeight: '500',
+        textAlign: DEVICE_SIZE.SMALL ? 'center' : 'left',
+    },
+    clearIcon: {
+        padding: 5,
+        color: COLORS.textMuted,
+        fontSize: 16,
+    },
+    resultsContainer: {
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
+        marginTop: 8,
+        padding: SPACING.md,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        maxHeight: 300,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    summaryTitle: {
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    metricValue: {
+        fontSize: moderateScale(14),
+        fontWeight: 'bold',
         color: COLORS.accent,
-        marginRight: 4,
     },
-    earningsIcon: {
-        fontSize: 10,
+    addressText: {
+        fontSize: moderateScale(12),
         color: COLORS.textSecondary,
+        textAlign: 'center',
+    },
+    resultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border + '22',
+    },
+    resultPin: {
+        fontSize: 18,
+        marginRight: 12,
+    },
+    resultInfo: {
+        flex: 1,
+    },
+    resultName: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    resultAddress: {
+        fontSize: 12,
+        color: COLORS.textMuted,
     },
     bottomSection: {
         position: 'absolute',
@@ -728,10 +728,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
         elevation: 8,
     },
     whereToIcon: {
@@ -740,14 +736,14 @@ const styles = StyleSheet.create({
     },
     whereToText: {
         flex: 1,
-        fontSize: FONTS.sizes.lg,
+        fontSize: 18,
         fontWeight: '600',
         color: COLORS.textSecondary,
     },
     whereToArrow: {
         fontSize: 18,
         color: COLORS.accent,
-        fontWeight: '700',
+        fontWeight: 'bold',
     },
     requestPanel: {
         backgroundColor: COLORS.bgSecondary,
@@ -755,11 +751,6 @@ const styles = StyleSheet.create({
         padding: SPACING.lg,
         borderWidth: 1,
         borderColor: COLORS.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 10,
     },
     locationRow: {
         flexDirection: 'row',
@@ -767,98 +758,90 @@ const styles = StyleSheet.create({
         marginBottom: SPACING.md,
     },
     locationDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        marginRight: SPACING.md,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        marginRight: 15,
     },
     locationInfo: {
         flex: 1,
     },
     locationLabel: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: 10,
         color: COLORS.textMuted,
-        fontWeight: '600',
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
     },
     locationName: {
-        fontSize: FONTS.sizes.md,
+        fontSize: 15,
         color: COLORS.textPrimary,
         fontWeight: '500',
-        marginTop: 2,
+    },
+    mapPickText: {
+        fontSize: 12,
+        color: COLORS.accent,
+        fontWeight: 'bold',
     },
     priceSection: {
-        marginTop: SPACING.sm,
-        marginBottom: SPACING.md,
+        marginVertical: SPACING.sm,
     },
     priceSectionTitle: {
-        fontSize: FONTS.sizes.sm,
-        fontWeight: '700',
+        fontSize: 14,
+        fontWeight: 'bold',
         color: COLORS.textSecondary,
-        marginBottom: SPACING.sm,
+        marginBottom: 8,
     },
-    priceSuggestions: {
+    priceGrid: {
         flexDirection: 'row',
-        gap: SPACING.sm,
+        flexWrap: 'wrap',
+        gap: 8,
+        justifyContent: 'center',
     },
-    priceChip: {
-        flex: 1,
+    priceSuggestion: {
         backgroundColor: COLORS.bgCard,
+        paddingVertical: 10,
+        paddingHorizontal: 15,
         borderRadius: RADIUS.md,
-        padding: SPACING.sm,
-        alignItems: 'center',
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: COLORS.border,
+        minWidth: DEVICE_SIZE.LARGE ? '30%' : (DEVICE_SIZE.MEDIUM ? '45%' : '100%'),
+        alignItems: 'center',
+    },
+    priceText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
     },
     priceChipActive: {
         borderColor: COLORS.accent,
-        backgroundColor: 'rgba(255, 107, 53, 0.1)',
-    },
-    priceChipLabel: {
-        fontSize: FONTS.sizes.xs,
-        color: COLORS.textMuted,
-        fontWeight: '600',
-    },
-    priceChipLabelActive: {
-        color: COLORS.accent,
-    },
-    priceChipPrice: {
-        fontSize: FONTS.sizes.md,
-        color: COLORS.textPrimary,
-        fontWeight: '700',
-        marginTop: 2,
-    },
-    priceChipPriceActive: {
-        color: COLORS.accent,
+        backgroundColor: COLORS.accent + '11',
     },
     customPriceRow: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.md,
-        marginTop: SPACING.sm,
+        marginTop: 10,
+        paddingHorizontal: 15,
         borderWidth: 1,
         borderColor: COLORS.border,
-        paddingHorizontal: SPACING.md,
     },
     currencySymbol: {
-        fontSize: FONTS.sizes.xl,
-        fontWeight: '700',
+        fontSize: 20,
+        fontWeight: 'bold',
         color: COLORS.accent,
-        marginRight: SPACING.xs,
     },
     customPriceInput: {
         flex: 1,
-        fontSize: FONTS.sizes.xl,
+        fontSize: 18,
+        fontWeight: 'bold',
         color: COLORS.textPrimary,
-        fontWeight: '700',
-        paddingVertical: 12,
+        paddingVertical: 10,
+        marginLeft: 5,
     },
     paymentRow: {
         flexDirection: 'row',
-        gap: SPACING.sm,
-        marginBottom: SPACING.md,
+        gap: 10,
+        marginVertical: 15,
     },
     paymentBtn: {
         flex: 1,
@@ -866,82 +849,61 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.md,
         paddingVertical: 12,
-        borderWidth: 1.5,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
         borderColor: COLORS.border,
-        gap: SPACING.xs,
+        gap: 8,
     },
     paymentBtnActive: {
         borderColor: COLORS.accent,
-        backgroundColor: 'rgba(255, 107, 53, 0.1)',
+        backgroundColor: COLORS.accent + '11',
     },
-    paymentEmoji: {
-        fontSize: 18,
-    },
-    paymentText: {
-        fontSize: FONTS.sizes.sm,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
-    },
-    paymentTextActive: {
-        color: COLORS.accent,
-    },
+    paymentEmoji: { fontSize: 18 },
+    paymentText: { color: COLORS.textSecondary, fontWeight: '600' },
+    paymentTextActive: { color: COLORS.accent },
     actionRow: {
         flexDirection: 'row',
-        gap: SPACING.sm,
+        gap: 10,
     },
     cancelBtn: {
-        backgroundColor: COLORS.bgCard,
         width: 50,
         height: 50,
         borderRadius: 25,
+        backgroundColor: COLORS.bgCard,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
-    cancelBtnText: {
-        fontSize: 20,
-        color: COLORS.textSecondary,
-    },
+    cancelBtnText: { fontSize: 20, color: COLORS.textSecondary },
     sendBtn: {
         flex: 1,
         backgroundColor: COLORS.accent,
-        borderRadius: RADIUS.xl,
-        paddingVertical: 14,
-        alignItems: 'center',
+        borderRadius: RADIUS.lg,
         justifyContent: 'center',
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        elevation: 6,
+        alignItems: 'center',
+        height: 50,
     },
     sendBtnSearching: {
-        backgroundColor: COLORS.accentDark,
-        opacity: 0.8,
+        backgroundColor: COLORS.textMuted,
     },
     sendBtnText: {
-        fontSize: FONTS.sizes.lg,
-        fontWeight: '700',
-        color: '#ffffff',
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
-    // Menu modal styles
     menuOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
     },
     menuContent: {
-        width: width * 0.8,
+        width: width * 0.75,
         height: '100%',
         backgroundColor: COLORS.bgSecondary,
-        borderRightWidth: 1,
-        borderRightColor: COLORS.border,
     },
     menuHeader: {
-        padding: SPACING.xl,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        padding: 30,
         backgroundColor: COLORS.bgCard,
         alignItems: 'center',
         borderBottomWidth: 1,
@@ -954,7 +916,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.bgPrimary,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SPACING.md,
+        marginBottom: 15,
         borderWidth: 2,
         borderColor: COLORS.accent,
     },
@@ -962,372 +924,114 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.textPrimary,
-        marginBottom: SPACING.xs,
+        marginBottom: 5,
     },
     ratingBadgeContainer: {
         alignItems: 'center',
-        marginBottom: SPACING.sm,
     },
     ratingPercent: {
         fontSize: 16,
-        fontWeight: '700',
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
     },
     recommendedBadge: {
-        backgroundColor: COLORS.success + '20',
+        backgroundColor: COLORS.success + '22',
         paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 4,
-        marginTop: 4,
+        borderRadius: 5,
+        marginTop: 5,
         borderWidth: 1,
         borderColor: COLORS.success,
     },
     recommendedText: {
-        menuButton: {
-            position: 'absolute',
-            top: Platform.OS === 'ios' ? 55 : 35,
-            left: SPACING.md,
-            zIndex: 110,
-            backgroundColor: COLORS.bgCard,
-            width: scale(45),
-            height: scale(45),
-            borderRadius: scale(22.5),
-            justifyContent: 'center',
-            alignItems: 'center',
-            elevation: 5,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 3,
-            borderWidth: 1,
-            borderColor: COLORS.accent + '44',
-        },
-        menuIcon: {
-            fontSize: moderateScale(20),
-            color: COLORS.accent,
-        },
-        recenterButton: {
-            position: 'absolute',
-            bottom: 100,
-            right: SPACING.md,
-            backgroundColor: COLORS.bgCard,
-            width: scale(50),
-            height: scale(50),
-            borderRadius: scale(25),
-            justifyContent: 'center',
-            alignItems: 'center',
-            elevation: 5,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 3,
-            borderWidth: 1,
-            borderColor: COLORS.accent + '44',
-        },
-        searchContainer: {
-            position: 'absolute',
-            top: Platform.OS === 'ios' ? 55 : 35,
-            left: scale(70),
-            right: SPACING.md,
-            zIndex: 100,
-        },
-        searchInputWrapper: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: COLORS.bgCard,
-            borderRadius: RADIUS.lg,
-            paddingHorizontal: SPACING.md,
-            paddingVertical: scale(10),
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 6,
-        },
-        searchInput: {
-            flex: 1,
-            fontSize: moderateScale(15),
-            color: COLORS.textPrimary,
-            fontWeight: '500',
-            textAlign: DEVICE_SIZE.SMALL ? 'center' : 'left',
-        },
-        priceGrid: {
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: scale(8),
-            marginBottom: SPACING.md,
-        },
-        priceSuggestion: {
-            backgroundColor: COLORS.bgCard,
-            paddingVertical: scale(10),
-            paddingHorizontal: scale(12),
-            borderRadius: RADIUS.md,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            minWidth: DEVICE_SIZE.LARGE ? '30%' : (DEVICE_SIZE.MEDIUM ? '45%' : '100%'),
-            alignItems: 'center',
-        },
-        priceText: {
-            color: COLORS.textPrimary,
-            fontSize: moderateScale(14),
-            fontWeight: 'bold',
-            textAlign: 'center',
-        },
-        sendBtn: {
-            backgroundColor: COLORS.accent,
-            borderRadius: RADIUS.lg,
-            paddingVertical: scale(15),
-            alignItems: 'center',
-            shadowColor: COLORS.accent,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 4,
-        },
-        sendBtnText: {
-            color: '#fff',
-            fontSize: moderateScale(16),
-            fontWeight: 'bold',
-            letterSpacing: 0.5,
-            textAlign: 'center',
-        },
-        searchingCard: {
-            backgroundColor: COLORS.bgSecondary,
-            width: DEVICE_SIZE.LARGE ? scale(400) : SCREEN_WIDTH * 0.85,
-            borderRadius: RADIUS.xl,
-            padding: scale(30),
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: COLORS.accent + '44',
-        },
-        searchingTitle: {
-            fontSize: moderateScale(22),
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-            marginBottom: 10,
-            textAlign: 'center',
-        },
-        searchingSub: {
-            fontSize: moderateScale(14),
-            color: COLORS.textMuted,
-            textAlign: 'center',
-            marginBottom: scale(30),
-            lineHeight: moderateScale(20),
-        },
-        summaryTitle: {
-            fontSize: moderateScale(18),
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-            textAlign: 'center',
-            marginBottom: SPACING.md,
-        },
-        addressText: {
-            fontSize: moderateScale(14),
-            color: COLORS.textSecondary,
-            textAlign: 'center',
-            marginVertical: 4,
-        },
-        searchInput: {
-            flex: 1,
-            fontSize: 16,
-            color: COLORS.textPrimary,
-            fontWeight: '500',
-        },
-        clearIcon: {
-            fontSize: 18,
-            color: COLORS.textMuted,
-            padding: 5,
-        },
-        resultsContainer: {
-            backgroundColor: COLORS.bgCard,
-            borderRadius: RADIUS.lg,
-            marginTop: 8,
-            padding: 5,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            maxHeight: 250,
-            overflow: 'hidden',
-        },
-        resultItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            padding: 12,
-            borderBottomWidth: 1,
-            borderBottomColor: COLORS.border + '22',
-        },
-        resultPin: {
-            fontSize: 18,
-            marginRight: 12,
-        },
-        resultInfo: {
-            flex: 1,
-        },
-        resultName: {
-            fontSize: 14,
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-        },
-        resultAddress: {
-            fontSize: 12,
-            color: COLORS.textMuted,
-            marginTop: 2,
-        },
-        mapPickerContainer: {
-            ...StyleSheet.absoluteFillObject,
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 50,
-        },
-        crosshairVertical: {
-            position: 'absolute',
-            width: 1,
-            height: 60,
-            backgroundColor: COLORS.accent,
-            opacity: 0.5,
-        },
-        crosshairHorizontal: {
-            position: 'absolute',
-            width: 60,
-            height: 1,
-            backgroundColor: COLORS.accent,
-            opacity: 0.5,
-        },
-        fixedPin: {
-            marginTop: -32, // Offset for pin point
-        },
-        fixedPinIcon: {
-            fontSize: 40,
-            textShadowColor: 'rgba(0, 0, 0, 0.4)',
-            textShadowOffset: { width: 0, height: 4 },
-            textShadowRadius: 6,
-            zIndex: 2,
-        },
-        pinPulse: {
-            position: 'absolute',
-            width: 20,
-            height: 10,
-            backgroundColor: 'rgba(255, 107, 53, 0.4)',
-            borderRadius: 10,
-            bottom: -5,
-            transform: [{ scaleX: 2 }],
-        },
-        pickerMetricsBox: {
-            position: 'absolute',
-            top: 150,
-            flexDirection: 'row',
-            backgroundColor: COLORS.bgCard,
-            borderRadius: RADIUS.lg,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: COLORS.accent,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 6,
-            zIndex: 200,
-        },
-        metricItem: {
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-        },
-        metricEmoji: {
-            fontSize: 14,
-        },
-        metricValue: {
-            fontSize: 14,
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-        },
-        metricDivider: {
-            width: 1,
-            height: 15,
-            backgroundColor: COLORS.border,
-            marginHorizontal: 12,
-        },
-        searchingOverlay: {
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
-        },
-        searchingCard: {
-            backgroundColor: COLORS.bgSecondary,
-            width: width * 0.85,
-            borderRadius: RADIUS.xl,
-            padding: 30,
-            alignItems: 'center',
-            borderWidth: 1,
-            borderColor: COLORS.accent + '44',
-        },
-        searchingPulse: {
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: COLORS.accent + '22',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginBottom: 20,
-        },
-        searchingEmoji: {
-            fontSize: 40,
-        },
-        searchingTitle: {
-            fontSize: 22,
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-            marginBottom: 10,
-            textAlign: 'center',
-        },
-        searchingSub: {
-            fontSize: 14,
-            color: COLORS.textMuted,
-            textAlign: 'center',
-            marginBottom: 30,
-            lineHeight: 20,
-        },
-        cancelRequestBtn: {
-            paddingVertical: 12,
-            paddingHorizontal: 25,
-            borderRadius: RADIUS.md,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-        },
-        cancelRequestText: {
-            color: COLORS.error,
-            fontWeight: 'bold',
-            fontSize: 14,
-        },
-        confirmMapPicker: {
-            position: 'absolute',
-            bottom: 40,
-            left: SPACING.xl,
-            right: SPACING.xl,
-            backgroundColor: COLORS.accent,
-            paddingVertical: 16,
-            borderRadius: RADIUS.xl,
-            alignItems: 'center',
-            shadowColor: COLORS.accent,
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.4,
-            shadowRadius: 10,
-            elevation: 8,
-            zIndex: 200,
-        },
-        confirmMapPickerText: {
-            color: '#fff',
-            fontSize: 18,
-            fontWeight: 'bold',
-        },
-        mapPickText: {
-            fontSize: 12,
-            color: COLORS.accent,
-            fontWeight: 'bold',
-        },
-    });
+        color: COLORS.success,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border + '11',
+    },
+    menuItemIcon: { fontSize: 20, marginRight: 15 },
+    menuItemText: { fontSize: 16, color: COLORS.textPrimary, fontWeight: '500' },
+    searchingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    searchingCard: {
+        backgroundColor: COLORS.bgSecondary,
+        width: width * 0.85,
+        borderRadius: RADIUS.xl,
+        padding: 30,
+        alignItems: 'center',
+    },
+    searchingPulse: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: COLORS.accent + '22',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    searchingEmoji: { fontSize: 40 },
+    searchingTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 10 },
+    searchingSub: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginBottom: 30 },
+    cancelRequestBtn: {
+        paddingVertical: 12,
+        paddingHorizontal: 25,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    cancelRequestText: { color: COLORS.error, fontWeight: 'bold' },
+    mapPickerContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    crosshairVertical: { width: 1, height: 40, backgroundColor: COLORS.accent, position: 'absolute' },
+    crosshairHorizontal: { width: 40, height: 1, backgroundColor: COLORS.accent, position: 'absolute' },
+    fixedPin: { marginBottom: 40 },
+    fixedPinIcon: { fontSize: 40 },
+    pinPulse: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: COLORS.accent + '44',
+        position: 'absolute',
+        bottom: -10,
+        left: 10,
+    },
+    pickerMetricsBox: {
+        position: 'absolute',
+        top: 100,
+        flexDirection: 'row',
+        backgroundColor: COLORS.bgCard,
+        padding: 15,
+        borderRadius: RADIUS.lg,
+        borderWidth: 1,
+        borderColor: COLORS.accent,
+        alignItems: 'center',
+    },
+    metricItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    metricEmoji: { fontSize: 14 },
+    metricDivider: { width: 1, height: 20, backgroundColor: COLORS.border, marginHorizontal: 15 },
+    confirmMapPicker: {
+        position: 'absolute',
+        bottom: 50,
+        left: 20,
+        right: 20,
+        backgroundColor: COLORS.accent,
+        padding: 15,
+        borderRadius: RADIUS.lg,
+        alignItems: 'center',
+    },
+    confirmMapPickerText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+});
