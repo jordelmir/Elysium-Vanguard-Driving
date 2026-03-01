@@ -391,14 +391,14 @@ export default function RiderDashboard({ navigation }) {
                         <View style={styles.metricItem}>
                             <Text style={styles.metricEmoji}>📏</Text>
                             <Text style={styles.metricValue}>
-                                {routeInfo.distance ? `${routeInfo.distance} km` : '...'}
+                                {routeInfo.distance || '0.0'} km
                             </Text>
                         </View>
                         <View style={styles.metricDivider} />
                         <View style={styles.metricItem}>
                             <Text style={styles.metricEmoji}>⏱️</Text>
                             <Text style={styles.metricValue}>
-                                {routeInfo.duration ? `${routeInfo.duration} min` : '...'}
+                                {routeInfo.duration || '2'} min
                             </Text>
                         </View>
                     </View>
@@ -418,9 +418,9 @@ export default function RiderDashboard({ navigation }) {
             )}
 
             <View style={styles.bottomSection}>
-                {!showPanel && (
+                {!showPanel && !isMapPickerMode && (
                     <TouchableOpacity
-                        style={[styles.recenterButton, { bottom: isMapPickerMode ? 130 : 20 }]}
+                        style={[styles.recenterButton, { bottom: 20 }]}
                         onPress={async () => {
                             try {
                                 const loc = await getCurrentLocation();
@@ -442,108 +442,110 @@ export default function RiderDashboard({ navigation }) {
                 )}
 
 
-                <Animated.View
-                    style={[
-                        styles.requestPanel,
-                        { transform: [{ translateY: panelTranslateY }] },
-                    ]}
-                >
-                    <View style={styles.locationRow}>
-                        <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
-                        <View style={styles.locationInfo}>
-                            <Text style={styles.locationLabel}>Recoger en</Text>
-                            <Text style={styles.locationName}>{pickupName || 'Tu ubicación actual'}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.locationRow}>
-                        <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
-                        <View style={styles.locationInfo}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text style={styles.locationLabel}>Destino</Text>
-                                <TouchableOpacity onPress={() => setIsMapPickerMode(true)}>
-                                    <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
-                                </TouchableOpacity>
+                {!isMapPickerMode && (
+                    <Animated.View
+                        style={[
+                            styles.requestPanel,
+                            { transform: [{ translateY: panelTranslateY }] },
+                        ]}
+                    >
+                        <View style={styles.locationRow}>
+                            <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
+                            <View style={styles.locationInfo}>
+                                <Text style={styles.locationLabel}>Recoger en</Text>
+                                <Text style={styles.locationName}>{pickupName || 'Tu ubicación actual'}</Text>
                             </View>
-                            <Text style={styles.locationName} numberOfLines={2}>
-                                {destinationName || 'Selecciona un destino'}
-                            </Text>
                         </View>
-                    </View>
 
-                    {priceSuggestions.length > 0 && (
-                        <View style={styles.priceSection}>
-                            <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
-                            <View style={styles.priceGrid}>
-                                {priceSuggestions.map((item, index) => (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={[
-                                            styles.priceSuggestion,
-                                            selectedPrice === item.price && styles.priceChipActive,
-                                        ]}
-                                        onPress={() => {
-                                            setSelectedPrice(item.price);
-                                            setCustomPrice(item.price.toString());
-                                        }}
-                                    >
-                                        <Text style={[
-                                            styles.priceText,
-                                            selectedPrice === item.price && { color: COLORS.accent },
-                                        ]}>
-                                            {item.label} ({formatPrice(item.price)})
-                                        </Text>
+                        <View style={styles.locationRow}>
+                            <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
+                            <View style={styles.locationInfo}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Text style={styles.locationLabel}>Destino</Text>
+                                    <TouchableOpacity onPress={() => setIsMapPickerMode(true)}>
+                                        <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
                                     </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            <View style={styles.customPriceRow}>
-                                <Text style={styles.currencySymbol}>₡</Text>
-                                <TextInput
-                                    style={styles.customPriceInput}
-                                    value={customPrice}
-                                    onChangeText={setCustomPrice}
-                                    keyboardType="numeric"
-                                    placeholder="Precio personalizado"
-                                    placeholderTextColor={COLORS.textMuted}
-                                />
+                                </View>
+                                <Text style={styles.locationName} numberOfLines={2}>
+                                    {destinationName || 'Selecciona un destino'}
+                                </Text>
                             </View>
                         </View>
-                    )}
 
-                    <View style={styles.paymentRow}>
-                        <TouchableOpacity
-                            style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
-                            onPress={() => setPaymentMethod('cash')}
-                        >
-                            <Text style={styles.paymentEmoji}>💵</Text>
-                            <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
-                            onPress={() => setPaymentMethod('sinpe')}
-                        >
-                            <Text style={styles.paymentEmoji}>📱</Text>
-                            <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
-                        </TouchableOpacity>
-                    </View>
+                        {priceSuggestions.length > 0 && (
+                            <View style={styles.priceSection}>
+                                <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
+                                <View style={styles.priceGrid}>
+                                    {priceSuggestions.map((item, index) => (
+                                        <TouchableOpacity
+                                            key={index}
+                                            style={[
+                                                styles.priceSuggestion,
+                                                selectedPrice === item.price && styles.priceChipActive,
+                                            ]}
+                                            onPress={() => {
+                                                setSelectedPrice(item.price);
+                                                setCustomPrice(item.price.toString());
+                                            }}
+                                        >
+                                            <Text style={[
+                                                styles.priceText,
+                                                selectedPrice === item.price && { color: COLORS.accent },
+                                            ]}>
+                                                {item.label} ({formatPrice(item.price)})
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
 
-                    <View style={styles.actionRow}>
-                        <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
-                            <Text style={styles.cancelBtnText}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
-                            activeOpacity={0.8}
-                            onPress={sendRideRequest}
-                            disabled={rideStatus === 'searching'}
-                        >
-                            <Text style={styles.sendBtnText}>
-                                {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
+                                <View style={styles.customPriceRow}>
+                                    <Text style={styles.currencySymbol}>₡</Text>
+                                    <TextInput
+                                        style={styles.customPriceInput}
+                                        value={customPrice}
+                                        onChangeText={setCustomPrice}
+                                        keyboardType="numeric"
+                                        placeholder="Precio personalizado"
+                                        placeholderTextColor={COLORS.textMuted}
+                                    />
+                                </View>
+                            </View>
+                        )}
+
+                        <View style={styles.paymentRow}>
+                            <TouchableOpacity
+                                style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
+                                onPress={() => setPaymentMethod('cash')}
+                            >
+                                <Text style={styles.paymentEmoji}>💵</Text>
+                                <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
+                                onPress={() => setPaymentMethod('sinpe')}
+                            >
+                                <Text style={styles.paymentEmoji}>📱</Text>
+                                <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.actionRow}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
+                                <Text style={styles.cancelBtnText}>✕</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
+                                activeOpacity={0.8}
+                                onPress={sendRideRequest}
+                                disabled={rideStatus === 'searching'}
+                            >
+                                <Text style={styles.sendBtnText}>
+                                    {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Animated.View>
+                )}
             </View>
 
             <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
