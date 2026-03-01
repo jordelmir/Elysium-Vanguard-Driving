@@ -15,6 +15,7 @@ import {
     collection, query, where, onSnapshot, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
+import { scale, moderateScale, SCREEN_WIDTH, SCREEN_HEIGHT, DEVICE_SIZE } from '../../theme/responsive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -335,6 +336,16 @@ export default function RiderDashboard({ navigation }) {
 
                 {searchResults.length > 0 && (
                     <View style={styles.resultsContainer}>
+                        {/* Summary Info */}
+                        <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
+                            <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
+                                <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
+                                <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
+                            </View>
+                            <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
+                            <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
+                        </View>
                         {searchResults.map((item) => (
                             <TouchableOpacity
                                 key={item.id}
@@ -372,12 +383,16 @@ export default function RiderDashboard({ navigation }) {
                     <View style={styles.pickerMetricsBox}>
                         <View style={styles.metricItem}>
                             <Text style={styles.metricEmoji}>📏</Text>
-                            <Text style={styles.metricValue}>{routeInfo.distance} km</Text>
+                            <Text style={styles.metricValue}>
+                                {routeInfo.distance ? `${routeInfo.distance} km` : '...'}
+                            </Text>
                         </View>
                         <View style={styles.metricDivider} />
                         <View style={styles.metricItem}>
                             <Text style={styles.metricEmoji}>⏱️</Text>
-                            <Text style={styles.metricValue}>{routeInfo.duration} min</Text>
+                            <Text style={styles.metricValue}>
+                                {routeInfo.duration ? `${routeInfo.duration} min` : '...'}
+                            </Text>
                         </View>
                     </View>
                 </>
@@ -967,276 +982,352 @@ const styles = StyleSheet.create({
         borderColor: COLORS.success,
     },
     recommendedText: {
-        fontSize: 10,
-        fontWeight: '900',
-        color: COLORS.success,
-    },
-    userTrips: {
-        fontSize: 14,
-        color: COLORS.textMuted,
-    },
-    menuItems: {
-        padding: SPACING.lg,
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: SPACING.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.borderLight,
-    },
-    menuItemIcon: {
-        fontSize: 22,
-        marginRight: SPACING.md,
-    },
-    menuItemText: {
-        fontSize: 16,
-        color: COLORS.textPrimary,
-        fontWeight: '500',
-    },
-    recenterButton: {
-        position: 'absolute',
-        bottom: 120,
-        right: SPACING.lg,
-        backgroundColor: COLORS.bgSecondary,
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 5,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-        borderWidth: 1,
-        borderColor: COLORS.accent + '44',
-    },
-    searchContainer: {
-        position: 'absolute',
-        top: Platform.OS === 'ios' ? 60 : 40,
-        left: 70,
-        right: SPACING.md,
-        zIndex: 100,
-    },
-    searchInputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.lg,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: 12,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    searchIcon: {
-        fontSize: 16,
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        color: COLORS.textPrimary,
-        fontWeight: '500',
-    },
-    clearIcon: {
-        fontSize: 18,
-        color: COLORS.textMuted,
-        padding: 5,
-    },
-    resultsContainer: {
-        backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.lg,
-        marginTop: 8,
-        padding: 5,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        maxHeight: 250,
-        overflow: 'hidden',
-    },
-    resultItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.border + '22',
-    },
-    resultPin: {
-        fontSize: 18,
-        marginRight: 12,
-    },
-    resultInfo: {
-        flex: 1,
-    },
-    resultName: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: COLORS.textPrimary,
-    },
-    resultAddress: {
-        fontSize: 12,
-        color: COLORS.textMuted,
-        marginTop: 2,
-    },
-    mapPickerContainer: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 50,
-    },
-    crosshairVertical: {
-        position: 'absolute',
-        width: 1,
-        height: 60,
-        backgroundColor: COLORS.accent,
-        opacity: 0.5,
-    },
-    crosshairHorizontal: {
-        position: 'absolute',
-        width: 60,
-        height: 1,
-        backgroundColor: COLORS.accent,
-        opacity: 0.5,
-    },
-    fixedPin: {
-        marginTop: -32, // Offset for pin point
-    },
-    fixedPinIcon: {
-        fontSize: 40,
-        textShadowColor: 'rgba(0, 0, 0, 0.4)',
-        textShadowOffset: { width: 0, height: 4 },
-        textShadowRadius: 6,
-        zIndex: 2,
-    },
-    pinPulse: {
-        position: 'absolute',
-        width: 20,
-        height: 10,
-        backgroundColor: 'rgba(255, 107, 53, 0.4)',
-        borderRadius: 10,
-        bottom: -5,
-        transform: [{ scaleX: 2 }],
-    },
-    pickerMetricsBox: {
-        position: 'absolute',
-        top: 150,
-        flexDirection: 'row',
-        backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.lg,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.accent,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
-        zIndex: 200,
-    },
-    metricItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    metricEmoji: {
-        fontSize: 14,
-    },
-    metricValue: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: COLORS.textPrimary,
-    },
-    metricDivider: {
-        width: 1,
-        height: 15,
-        backgroundColor: COLORS.border,
-        marginHorizontal: 12,
-    },
-    searchingOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.85)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    },
-    searchingCard: {
-        backgroundColor: COLORS.bgSecondary,
-        width: width * 0.85,
-        borderRadius: RADIUS.xl,
-        padding: 30,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.accent + '44',
-    },
-    searchingPulse: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: COLORS.accent + '22',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    searchingEmoji: {
-        fontSize: 40,
-    },
-    searchingTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: COLORS.textPrimary,
-        marginBottom: 10,
-        textAlign: 'center',
-    },
-    searchingSub: {
-        fontSize: 14,
-        color: COLORS.textMuted,
-        textAlign: 'center',
-        marginBottom: 30,
-        lineHeight: 20,
-    },
-    cancelRequestBtn: {
-        paddingVertical: 12,
-        paddingHorizontal: 25,
-        borderRadius: RADIUS.md,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    cancelRequestText: {
-        color: COLORS.error,
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    confirmMapPicker: {
-        position: 'absolute',
-        bottom: 40,
-        left: SPACING.xl,
-        right: SPACING.xl,
-        backgroundColor: COLORS.accent,
-        paddingVertical: 16,
-        borderRadius: RADIUS.xl,
-        alignItems: 'center',
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-        elevation: 8,
-        zIndex: 200,
-    },
-    confirmMapPickerText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    mapPickText: {
-        fontSize: 12,
-        color: COLORS.accent,
-        fontWeight: 'bold',
-    },
-});
+        menuButton: {
+            position: 'absolute',
+            top: Platform.OS === 'ios' ? 55 : 35,
+            left: SPACING.md,
+            zIndex: 110,
+            backgroundColor: COLORS.bgCard,
+            width: scale(45),
+            height: scale(45),
+            borderRadius: scale(22.5),
+            justifyContent: 'center',
+            alignItems: 'center',
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 3,
+            borderWidth: 1,
+            borderColor: COLORS.accent + '44',
+        },
+        menuIcon: {
+            fontSize: moderateScale(20),
+            color: COLORS.accent,
+        },
+        recenterButton: {
+            position: 'absolute',
+            bottom: 100,
+            right: SPACING.md,
+            backgroundColor: COLORS.bgCard,
+            width: scale(50),
+            height: scale(50),
+            borderRadius: scale(25),
+            justifyContent: 'center',
+            alignItems: 'center',
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 3,
+            borderWidth: 1,
+            borderColor: COLORS.accent + '44',
+        },
+        searchContainer: {
+            position: 'absolute',
+            top: Platform.OS === 'ios' ? 55 : 35,
+            left: scale(70),
+            right: SPACING.md,
+            zIndex: 100,
+        },
+        searchInputWrapper: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: COLORS.bgCard,
+            borderRadius: RADIUS.lg,
+            paddingHorizontal: SPACING.md,
+            paddingVertical: scale(10),
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 6,
+        },
+        searchInput: {
+            flex: 1,
+            fontSize: moderateScale(15),
+            color: COLORS.textPrimary,
+            fontWeight: '500',
+            textAlign: DEVICE_SIZE.SMALL ? 'center' : 'left',
+        },
+        priceGrid: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: scale(8),
+            marginBottom: SPACING.md,
+        },
+        priceSuggestion: {
+            backgroundColor: COLORS.bgCard,
+            paddingVertical: scale(10),
+            paddingHorizontal: scale(12),
+            borderRadius: RADIUS.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            minWidth: DEVICE_SIZE.LARGE ? '30%' : (DEVICE_SIZE.MEDIUM ? '45%' : '100%'),
+            alignItems: 'center',
+        },
+        priceText: {
+            color: COLORS.textPrimary,
+            fontSize: moderateScale(14),
+            fontWeight: 'bold',
+            textAlign: 'center',
+        },
+        sendBtn: {
+            backgroundColor: COLORS.accent,
+            borderRadius: RADIUS.lg,
+            paddingVertical: scale(15),
+            alignItems: 'center',
+            shadowColor: COLORS.accent,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 4,
+        },
+        sendBtnText: {
+            color: '#fff',
+            fontSize: moderateScale(16),
+            fontWeight: 'bold',
+            letterSpacing: 0.5,
+            textAlign: 'center',
+        },
+        searchingCard: {
+            backgroundColor: COLORS.bgSecondary,
+            width: DEVICE_SIZE.LARGE ? scale(400) : SCREEN_WIDTH * 0.85,
+            borderRadius: RADIUS.xl,
+            padding: scale(30),
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: COLORS.accent + '44',
+        },
+        searchingTitle: {
+            fontSize: moderateScale(22),
+            fontWeight: 'bold',
+            color: COLORS.textPrimary,
+            marginBottom: 10,
+            textAlign: 'center',
+        },
+        searchingSub: {
+            fontSize: moderateScale(14),
+            color: COLORS.textMuted,
+            textAlign: 'center',
+            marginBottom: scale(30),
+            lineHeight: moderateScale(20),
+        },
+        summaryTitle: {
+            fontSize: moderateScale(18),
+            fontWeight: 'bold',
+            color: COLORS.textPrimary,
+            textAlign: 'center',
+            marginBottom: SPACING.md,
+        },
+        addressText: {
+            fontSize: moderateScale(14),
+            color: COLORS.textSecondary,
+            textAlign: 'center',
+            marginVertical: 4,
+        },
+        searchInput: {
+            flex: 1,
+            fontSize: 16,
+            color: COLORS.textPrimary,
+            fontWeight: '500',
+        },
+        clearIcon: {
+            fontSize: 18,
+            color: COLORS.textMuted,
+            padding: 5,
+        },
+        resultsContainer: {
+            backgroundColor: COLORS.bgCard,
+            borderRadius: RADIUS.lg,
+            marginTop: 8,
+            padding: 5,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            maxHeight: 250,
+            overflow: 'hidden',
+        },
+        resultItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: COLORS.border + '22',
+        },
+        resultPin: {
+            fontSize: 18,
+            marginRight: 12,
+        },
+        resultInfo: {
+            flex: 1,
+        },
+        resultName: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: COLORS.textPrimary,
+        },
+        resultAddress: {
+            fontSize: 12,
+            color: COLORS.textMuted,
+            marginTop: 2,
+        },
+        mapPickerContainer: {
+            ...StyleSheet.absoluteFillObject,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 50,
+        },
+        crosshairVertical: {
+            position: 'absolute',
+            width: 1,
+            height: 60,
+            backgroundColor: COLORS.accent,
+            opacity: 0.5,
+        },
+        crosshairHorizontal: {
+            position: 'absolute',
+            width: 60,
+            height: 1,
+            backgroundColor: COLORS.accent,
+            opacity: 0.5,
+        },
+        fixedPin: {
+            marginTop: -32, // Offset for pin point
+        },
+        fixedPinIcon: {
+            fontSize: 40,
+            textShadowColor: 'rgba(0, 0, 0, 0.4)',
+            textShadowOffset: { width: 0, height: 4 },
+            textShadowRadius: 6,
+            zIndex: 2,
+        },
+        pinPulse: {
+            position: 'absolute',
+            width: 20,
+            height: 10,
+            backgroundColor: 'rgba(255, 107, 53, 0.4)',
+            borderRadius: 10,
+            bottom: -5,
+            transform: [{ scaleX: 2 }],
+        },
+        pickerMetricsBox: {
+            position: 'absolute',
+            top: 150,
+            flexDirection: 'row',
+            backgroundColor: COLORS.bgCard,
+            borderRadius: RADIUS.lg,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: COLORS.accent,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 6,
+            zIndex: 200,
+        },
+        metricItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+        },
+        metricEmoji: {
+            fontSize: 14,
+        },
+        metricValue: {
+            fontSize: 14,
+            fontWeight: 'bold',
+            color: COLORS.textPrimary,
+        },
+        metricDivider: {
+            width: 1,
+            height: 15,
+            backgroundColor: COLORS.border,
+            marginHorizontal: 12,
+        },
+        searchingOverlay: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+        },
+        searchingCard: {
+            backgroundColor: COLORS.bgSecondary,
+            width: width * 0.85,
+            borderRadius: RADIUS.xl,
+            padding: 30,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: COLORS.accent + '44',
+        },
+        searchingPulse: {
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: COLORS.accent + '22',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 20,
+        },
+        searchingEmoji: {
+            fontSize: 40,
+        },
+        searchingTitle: {
+            fontSize: 22,
+            fontWeight: 'bold',
+            color: COLORS.textPrimary,
+            marginBottom: 10,
+            textAlign: 'center',
+        },
+        searchingSub: {
+            fontSize: 14,
+            color: COLORS.textMuted,
+            textAlign: 'center',
+            marginBottom: 30,
+            lineHeight: 20,
+        },
+        cancelRequestBtn: {
+            paddingVertical: 12,
+            paddingHorizontal: 25,
+            borderRadius: RADIUS.md,
+            borderWidth: 1,
+            borderColor: COLORS.border,
+        },
+        cancelRequestText: {
+            color: COLORS.error,
+            fontWeight: 'bold',
+            fontSize: 14,
+        },
+        confirmMapPicker: {
+            position: 'absolute',
+            bottom: 40,
+            left: SPACING.xl,
+            right: SPACING.xl,
+            backgroundColor: COLORS.accent,
+            paddingVertical: 16,
+            borderRadius: RADIUS.xl,
+            alignItems: 'center',
+            shadowColor: COLORS.accent,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.4,
+            shadowRadius: 10,
+            elevation: 8,
+            zIndex: 200,
+        },
+        confirmMapPickerText: {
+            color: '#fff',
+            fontSize: 18,
+            fontWeight: 'bold',
+        },
+        mapPickText: {
+            fontSize: 12,
+            color: COLORS.accent,
+            fontWeight: 'bold',
+        },
+    });
