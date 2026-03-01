@@ -278,351 +278,357 @@ export default function RiderDashboard({ navigation }) {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
 
-            {myLocation && (
-                <View style={styles.map}>
-                    <LeafletView
-                        ref={mapRef}
-                        backgroundColor={COLORS.bgPrimary}
-                        onMessageReceived={handleMapMessage}
-                        mapLayers={[
-                            {
-                                baseLayerName: 'CartoDB Dark Matter',
-                                baseLayerIsActive: true,
-                                url: CARTO_DARK_TILES,
-                                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-                            }
-                        ]}
-                        mapCenterPosition={{
-                            lat: myLocation.latitude,
-                            lng: myLocation.longitude
-                        }}
-                        zoom={14}
-                        mapMarkers={[
-                            {
-                                id: 'user-loc',
-                                position: { lat: myLocation.latitude, lng: myLocation.longitude },
-                                icon: '📍',
-                                size: [32, 32],
-                            },
-                            ...(destination ? [{
-                                id: 'destination',
-                                position: { lat: destination.latitude, lng: destination.longitude },
-                                icon: '🏁',
-                                size: [32, 32],
-                            }] : []),
-                            ...drivers.map(d => ({
-                                id: `drv-${d.id}`,
-                                position: { lat: d.location.latitude, lng: d.location.longitude },
-                                icon: '🚗',
-                                size: [32, 32],
-                            }))
-                        ]}
-                    />
-                </View>
-            )}
-
-            {!isMapPickerMode && (
-                <View style={styles.searchContainer}>
-                    <View style={styles.searchInputWrapper}>
-                        <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
-                        <TextInput
-                            style={styles.searchInput}
-                            placeholder="📍 ¿A dónde vamos en CR?"
-                            placeholderTextColor={COLORS.textMuted}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            onFocus={() => {
-                                if (!showPanel) togglePanel();
+                {myLocation && (
+                    <View style={styles.map}>
+                        <LeafletView
+                            ref={mapRef}
+                            backgroundColor={COLORS.bgPrimary}
+                            onMessageReceived={handleMapMessage}
+                            mapLayers={[
+                                {
+                                    baseLayerName: 'CartoDB Dark Matter',
+                                    baseLayerIsActive: true,
+                                    url: CARTO_DARK_TILES,
+                                    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                                }
+                            ]}
+                            mapCenterPosition={{
+                                lat: myLocation.latitude,
+                                lng: myLocation.longitude
                             }}
+                            zoom={14}
+                            mapMarkers={[
+                                {
+                                    id: 'user-loc',
+                                    position: { lat: myLocation.latitude, lng: myLocation.longitude },
+                                    icon: '📍',
+                                    size: [32, 32],
+                                },
+                                ...(destination ? [{
+                                    id: 'destination',
+                                    position: { lat: destination.latitude, lng: destination.longitude },
+                                    icon: '🏁',
+                                    size: [32, 32],
+                                }] : []),
+                                ...drivers.map(d => ({
+                                    id: `drv-${d.id}`,
+                                    position: { lat: d.location.latitude, lng: d.location.longitude },
+                                    icon: '🚗',
+                                    size: [32, 32],
+                                }))
+                            ]}
                         />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                <Text style={styles.clearIcon}>✕</Text>
-                            </TouchableOpacity>
+                    </View>
+                )}
+
+                {!isMapPickerMode && (
+                    <View style={styles.searchContainer}>
+                        <View style={styles.searchInputWrapper}>
+                            <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
+                            <TextInput
+                                style={styles.searchInput}
+                                placeholder="📍 ¿A dónde vamos en CR?"
+                                placeholderTextColor={COLORS.textMuted}
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                                onFocus={() => {
+                                    if (!showPanel) togglePanel();
+                                }}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <Text style={styles.clearIcon}>✕</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {searchResults.length > 0 && (
+                            <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
+                                <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
+                                    <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
+                                        <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
+                                        <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
+                                    </View>
+                                    <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
+                                    <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
+                                </View>
+                                {searchResults.map((item) => (
+                                    <TouchableOpacity
+                                        key={item.id}
+                                        style={styles.resultItem}
+                                        onPress={() => selectSearchResult(item)}
+                                    >
+                                        <Text style={styles.resultPin}>📍</Text>
+                                        <View style={styles.resultInfo}>
+                                            <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
+                                            <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                ))}
+                            </Animated.View>
                         )}
                     </View>
+                )}
 
-                    {searchResults.length > 0 && (
-                        <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
-                            <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
-                                <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
-                                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
-                                    <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
-                                    <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
-                                </View>
-                                <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
-                                <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
-                            </View>
-                            {searchResults.map((item) => (
-                                <TouchableOpacity
-                                    key={item.id}
-                                    style={styles.resultItem}
-                                    onPress={() => selectSearchResult(item)}
-                                >
-                                    <Text style={styles.resultPin}>📍</Text>
-                                    <View style={styles.resultInfo}>
-                                        <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
-                                        <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                            ))}
-                        </Animated.View>
-                    )}
-                </View>
-            )}
-
-            {!isMapPickerMode && (
-                <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)}>
-                    <Text style={styles.menuIcon}>☰</Text>
-                </TouchableOpacity>
-            )}
-
-            {isMapPickerMode && (
-                <>
-                    <View style={styles.mapPickerContainer} pointerEvents="none">
-                        <View style={styles.crosshairVertical} />
-                        <View style={styles.crosshairHorizontal} />
-                        <View style={styles.fixedPin}>
-                            <Text style={styles.fixedPinIcon}>📍</Text>
-                            <View style={styles.pinPulse} />
-                        </View>
-                    </View>
-
-                    <View style={styles.pickerMetricsBox}>
-                        <View style={styles.metricItem}>
-                            <Text style={styles.metricEmoji}>📏</Text>
-                            <Text style={styles.metricValue}>
-                                {routeInfo.distance || '0.0'} km
-                            </Text>
-                        </View>
-                        <View style={styles.metricDivider} />
-                        <View style={styles.metricItem}>
-                            <Text style={styles.metricEmoji}>⏱️</Text>
-                            <Text style={styles.metricValue}>
-                                {routeInfo.duration || '2'} min
-                            </Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.confirmMapPicker}
-                        onPress={async () => {
-                            setIsMapPickerMode(false);
-                            const details = await getPlaceDetails(destination.latitude, destination.longitude);
-                            setDestinationName(details.address);
-                            if (!showPanel) togglePanel();
-                        }}
-                    >
-                        <Text style={styles.confirmMapPickerText}>Confirmar Destino</Text>
-                    </TouchableOpacity>
-                </>
-            )}
-
-            <View style={styles.bottomSection}>
-                {!showPanel && !isMapPickerMode && (
-                    <TouchableOpacity
-                        style={[styles.recenterButton, { bottom: 20 }]}
-                        onPress={async () => {
-                            try {
-                                const loc = await getCurrentLocation();
-                                setMyLocation(loc);
-                                if (mapRef.current) {
-                                    mapRef.current.injectJavaScript(`
-                                        window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
-                                    `);
-                                }
-                                const addr = await reverseGeocode(loc.latitude, loc.longitude);
-                                setPickupName(addr);
-                            } catch (err) {
-                                Alert.alert('GPS', 'No se pudo obtener la ubicación exacta');
-                            }
-                        }}
-                    >
-                        <Text style={{ fontSize: 24 }}>🎯</Text>
+                {!isMapPickerMode && (
+                    <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)}>
+                        <Text style={styles.menuIcon}>☰</Text>
                     </TouchableOpacity>
                 )}
 
-
-                {!isMapPickerMode && (
-                    <Animated.View
-                        style={[
-                            styles.requestPanel,
-                            { transform: [{ translateY: panelTranslateY }] },
-                        ]}
-                    >
-                        <View style={styles.locationRow}>
-                            <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
-                            <View style={styles.locationInfo}>
-                                <Text style={styles.locationLabel}>Recoger en</Text>
-                                <Text style={styles.locationName}>{pickupName || 'Tu ubicación actual'}</Text>
+                {isMapPickerMode && (
+                    <>
+                        <View style={styles.mapPickerContainer} pointerEvents="none">
+                            <View style={styles.crosshairVertical} />
+                            <View style={styles.crosshairHorizontal} />
+                            <View style={styles.fixedPin}>
+                                <Text style={styles.fixedPinIcon}>📍</Text>
+                                <View style={styles.pinPulse} />
                             </View>
                         </View>
 
-                        <View style={styles.locationRow}>
-                            <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
-                            <View style={styles.locationInfo}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={styles.locationLabel}>Destino</Text>
-                                    <TouchableOpacity onPress={() => {
-                                        if (!destination && myLocation) {
-                                            setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
-                                        }
-                                        setIsMapPickerMode(true);
-                                    }}>
-                                        <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                <Text style={styles.locationName} numberOfLines={2}>
-                                    {destinationName || 'Selecciona un destino'}
+                        <View style={styles.pickerMetricsBox}>
+                            <View style={styles.metricItem}>
+                                <Text style={styles.metricEmoji}>📏</Text>
+                                <Text style={styles.metricValue}>
+                                    {routeInfo.distance || '0.0'} km
+                                </Text>
+                            </View>
+                            <View style={styles.metricDivider} />
+                            <View style={styles.metricItem}>
+                                <Text style={styles.metricEmoji}>⏱️</Text>
+                                <Text style={styles.metricValue}>
+                                    {routeInfo.duration || '2'} min
                                 </Text>
                             </View>
                         </View>
 
-                        {priceSuggestions.length > 0 && (
-                            <View style={styles.priceSection}>
-                                <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
-                                <View style={styles.priceGrid}>
-                                    {priceSuggestions.map((item, index) => (
-                                        <TouchableOpacity
-                                            key={index}
-                                            style={[
-                                                styles.priceSuggestion,
-                                                selectedPrice === item.price && styles.priceChipActive,
-                                            ]}
-                                            onPress={() => {
-                                                setSelectedPrice(item.price);
-                                                setCustomPrice(item.price.toString());
-                                            }}
-                                        >
-                                            <Text style={[
-                                                styles.priceText,
-                                                selectedPrice === item.price && { color: COLORS.accent },
-                                            ]}>
-                                                {item.label} ({formatPrice(item.price)})
-                                            </Text>
+                        <TouchableOpacity
+                            style={styles.confirmMapPicker}
+                            onPress={async () => {
+                                setIsMapPickerMode(false);
+                                const details = await getPlaceDetails(destination.latitude, destination.longitude);
+                                setDestinationName(details.address);
+                                if (!showPanel) togglePanel();
+                            }}
+                        >
+                            <Text style={styles.confirmMapPickerText}>Confirmar Destino</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
+
+                <View style={styles.bottomSection}>
+                    {!showPanel && !isMapPickerMode && (
+                        <TouchableOpacity
+                            style={[styles.recenterButton, { bottom: 20 }]}
+                            onPress={async () => {
+                                try {
+                                    const loc = await getCurrentLocation();
+                                    setMyLocation(loc);
+                                    if (mapRef.current) {
+                                        mapRef.current.injectJavaScript(`
+                                        window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
+                                    `);
+                                    }
+                                    const addr = await reverseGeocode(loc.latitude, loc.longitude);
+                                    setPickupName(addr);
+                                } catch (err) {
+                                    Alert.alert('GPS', 'No se pudo obtener la ubicación exacta');
+                                }
+                            }}
+                        >
+                            <Text style={{ fontSize: 24 }}>🎯</Text>
+                        </TouchableOpacity>
+                    )}
+
+
+                    {!isMapPickerMode && (
+                        <Animated.View
+                            style={[
+                                styles.requestPanel,
+                                { transform: [{ translateY: panelTranslateY }] },
+                            ]}
+                        >
+                            <View style={styles.locationRow}>
+                                <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
+                                <View style={styles.locationInfo}>
+                                    <Text style={styles.locationLabel}>Recoger en</Text>
+                                    <Text style={styles.locationName}>{pickupName || 'Tu ubicación actual'}</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.locationRow}>
+                                <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
+                                <View style={styles.locationInfo}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <Text style={styles.locationLabel}>Destino</Text>
+                                        <TouchableOpacity onPress={() => {
+                                            if (!destination && myLocation) {
+                                                setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
+                                            }
+                                            setIsMapPickerMode(true);
+                                        }}>
+                                            <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
                                         </TouchableOpacity>
-                                    ))}
-                                </View>
-
-                                <View style={styles.customPriceRow}>
-                                    <Text style={styles.currencySymbol}>₡</Text>
-                                    <TextInput
-                                        style={styles.customPriceInput}
-                                        value={customPrice}
-                                        onChangeText={setCustomPrice}
-                                        keyboardType="numeric"
-                                        placeholder="Precio personalizado"
-                                        placeholderTextColor={COLORS.textMuted}
-                                    />
+                                    </View>
+                                    <Text style={styles.locationName} numberOfLines={2}>
+                                        {destinationName || 'Selecciona un destino'}
+                                    </Text>
                                 </View>
                             </View>
-                        )}
 
-                        <View style={styles.paymentRow}>
-                            <TouchableOpacity
-                                style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
-                                onPress={() => setPaymentMethod('cash')}
-                            >
-                                <Text style={styles.paymentEmoji}>💵</Text>
-                                <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
+                            {priceSuggestions.length > 0 && (
+                                <View style={styles.priceSection}>
+                                    <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
+                                    <View style={styles.priceGrid}>
+                                        {priceSuggestions.map((item, index) => (
+                                            <TouchableOpacity
+                                                key={index}
+                                                style={[
+                                                    styles.priceSuggestion,
+                                                    selectedPrice === item.price && styles.priceChipActive,
+                                                ]}
+                                                onPress={() => {
+                                                    setSelectedPrice(item.price);
+                                                    setCustomPrice(item.price.toString());
+                                                }}
+                                            >
+                                                <Text style={[
+                                                    styles.priceText,
+                                                    selectedPrice === item.price && { color: COLORS.accent },
+                                                ]}>
+                                                    {item.label} ({formatPrice(item.price)})
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+
+                                    <View style={styles.customPriceRow}>
+                                        <Text style={styles.currencySymbol}>₡</Text>
+                                        <TextInput
+                                            style={styles.customPriceInput}
+                                            value={customPrice}
+                                            onChangeText={setCustomPrice}
+                                            keyboardType="numeric"
+                                            placeholder="Precio personalizado"
+                                            placeholderTextColor={COLORS.textMuted}
+                                        />
+                                    </View>
+                                </View>
+                            )}
+
+                            <View style={styles.paymentRow}>
+                                <TouchableOpacity
+                                    style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
+                                    onPress={() => setPaymentMethod('cash')}
+                                >
+                                    <Text style={styles.paymentEmoji}>💵</Text>
+                                    <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
+                                    onPress={() => setPaymentMethod('sinpe')}
+                                >
+                                    <Text style={styles.paymentEmoji}>📱</Text>
+                                    <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.actionRow}>
+                                <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
+                                    <Text style={styles.cancelBtnText}>✕</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
+                                    activeOpacity={0.8}
+                                    onPress={sendRideRequest}
+                                    disabled={rideStatus === 'searching'}
+                                >
+                                    <Text style={styles.sendBtnText}>
+                                        {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        </Animated.View>
+                    )}
+                </View>
+
+                <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+                    <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
+                        <View style={styles.menuContent}>
+                            <View style={styles.menuHeader}>
+                                <View style={styles.userAvatarLarge}>
+                                    <Text style={{ fontSize: 40 }}>👤</Text>
+                                </View>
+                                <Text style={styles.menuUserName}>{userData?.name || 'Usuario'}</Text>
+                                <View style={styles.ratingBadgeContainer}>
+                                    <Text style={styles.ratingPercent}>
+                                        ⭐ {calculateRatingPercentage(userData?.rating || 5.0)}
+                                    </Text>
+                                    <View style={styles.recommendedBadge}>
+                                        <Text style={styles.recommendedText}>¡Pasajero Recomendado!</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            <TouchableOpacity style={styles.menuItem}>
+                                <Text style={styles.menuItemIcon}>📋</Text>
+                                <Text style={styles.menuItemText}>Mis viajes</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
-                                onPress={() => setPaymentMethod('sinpe')}
-                            >
-                                <Text style={styles.paymentEmoji}>📱</Text>
-                                <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
+                            <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                                <Text style={styles.menuItemIcon}>🚪</Text>
+                                <Text style={styles.menuItemText}>Cerrar sesión</Text>
                             </TouchableOpacity>
                         </View>
+                    </TouchableOpacity>
+                </Modal>
 
-                        <View style={styles.actionRow}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
-                                <Text style={styles.cancelBtnText}>✕</Text>
-                            </TouchableOpacity>
+                {rideStatus === 'searching' && (
+                    <Animated.View style={[styles.searchingOverlay, { opacity: slideAnim }]}>
+                        <View style={styles.searchingCard}>
+                            <Animated.View style={[styles.searchingPulse, {
+                                transform: [{
+                                    scale: slideAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [0.8, 1.2]
+                                    })
+                                }]
+                            }]}>
+                                <Text style={styles.searchingEmoji}>🚗</Text>
+                            </Animated.View>
+                            <Text style={styles.searchingTitle}>Buscando Conductores</Text>
+                            <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
+
+                            <View style={styles.searchingProgressContainer}>
+                                <Animated.View style={[styles.searchingProgressBar, {
+                                    transform: [{
+                                        translateX: progressAnim.interpolate({
+                                            inputRange: [0, 1],
+                                            outputRange: [-width * 0.4, width * 0.85]
+                                        })
+                                    }]
+                                }]} />
+                            </View>
+
                             <TouchableOpacity
-                                style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
-                                activeOpacity={0.8}
-                                onPress={sendRideRequest}
-                                disabled={rideStatus === 'searching'}
+                                style={styles.cancelRequestBtn}
+                                onPress={() => {
+                                    setRideStatus(null);
+                                    // Reset animations if needed
+                                }}
                             >
-                                <Text style={styles.sendBtnText}>
-                                    {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
-                                </Text>
+                                <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
                             </TouchableOpacity>
                         </View>
                     </Animated.View>
                 )}
-            </View>
-
-            <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
-                <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
-                    <View style={styles.menuContent}>
-                        <View style={styles.menuHeader}>
-                            <View style={styles.userAvatarLarge}>
-                                <Text style={{ fontSize: 40 }}>👤</Text>
-                            </View>
-                            <Text style={styles.menuUserName}>{userData?.name || 'Usuario'}</Text>
-                            <View style={styles.ratingBadgeContainer}>
-                                <Text style={styles.ratingPercent}>
-                                    ⭐ {calculateRatingPercentage(userData?.rating || 5.0)}
-                                </Text>
-                                <View style={styles.recommendedBadge}>
-                                    <Text style={styles.recommendedText}>¡Pasajero Recomendado!</Text>
-                                </View>
-                            </View>
-                        </View>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemIcon}>📋</Text>
-                            <Text style={styles.menuItemText}>Mis viajes</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={logout}>
-                            <Text style={styles.menuItemIcon}>🚪</Text>
-                            <Text style={styles.menuItemText}>Cerrar sesión</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-
-            {rideStatus === 'searching' && (
-                <Animated.View style={[styles.searchingOverlay, { opacity: slideAnim }]}>
-                    <View style={styles.searchingCard}>
-                        <Animated.View style={[styles.searchingPulse, {
-                            transform: [{
-                                scale: slideAnim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [0.8, 1.2]
-                                })
-                            }]
-                        }]}>
-                            <Text style={styles.searchingEmoji}>🚗</Text>
-                        </Animated.View>
-                        <Text style={styles.searchingTitle}>Buscando Conductores</Text>
-                        <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
-
-                        <View style={styles.searchingProgressContainer}>
-                            <Animated.View style={[styles.searchingProgressBar, {
-                                transform: [{
-                                    translateX: progressAnim.interpolate({
-                                        inputRange: [0, 1],
-                                        outputRange: [-width * 0.4, width * 0.85]
-                                    })
-                                }]
-                            }]} />
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.cancelRequestBtn}
-                            onPress={() => {
-                                setRideStatus(null);
-                                // Reset animations if needed
-                            }}
-                        >
-                            <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
-            )}
+            </KeyboardAvoidingView>
         </View>
     );
 }
@@ -771,6 +777,7 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: SPACING.md,
         paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.md,
+        backgroundColor: 'transparent',
     },
     whereToBtn: {
         backgroundColor: COLORS.bgCard,
