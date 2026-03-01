@@ -31,6 +31,7 @@ export default function RiderDashboard({ navigation }) {
     const [drivers, setDrivers] = useState([]);
     const [showPanel, setShowPanel] = useState(false);
     const [destination, setDestination] = useState(null);
+    const [routeInfo, setRouteInfo] = useState({ distance: 0, duration: 0 });
     const [destinationName, setDestinationName] = useState('');
     const [pickupName, setPickupName] = useState('');
     const [selectedPrice, setSelectedPrice] = useState(0);
@@ -111,21 +112,28 @@ export default function RiderDashboard({ navigation }) {
         const longitude = lng;
 
         setDestination({ latitude, longitude });
-        if (!isSilent) {
-            const details = await getPlaceDetails(latitude, longitude);
-            setDestinationName(details.address);
-        }
 
+        let dist = 0;
         if (myLocation) {
-            const dist = calculateDistance(
+            dist = calculateDistance(
                 myLocation.latitude, myLocation.longitude,
                 latitude, longitude
             );
             const pricing = calculateSuggestedPrice(dist);
+            setRouteInfo({
+                distance: pricing.distanceKm,
+                duration: pricing.estimatedMinutes
+            });
+
             const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
             setPriceSuggestions(suggestions);
             setSelectedPrice(pricing.suggestedPrice);
             setCustomPrice(pricing.suggestedPrice.toString());
+        }
+
+        if (!isSilent) {
+            const details = await getPlaceDetails(latitude, longitude);
+            setDestinationName(details.address);
         }
     };
 
@@ -165,6 +173,10 @@ export default function RiderDashboard({ navigation }) {
                 item.latitude, item.longitude
             );
             const pricing = calculateSuggestedPrice(dist);
+            setRouteInfo({
+                distance: pricing.distanceKm,
+                duration: pricing.estimatedMinutes
+            });
             const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
             setPriceSuggestions(suggestions);
             setSelectedPrice(pricing.suggestedPrice);
@@ -215,6 +227,8 @@ export default function RiderDashboard({ navigation }) {
                     longitude: destination.longitude,
                     name: destinationName,
                 },
+                distance: routeInfo.distance,
+                duration: routeInfo.duration,
                 proposedPrice: Number(customPrice),
                 acceptedPrice: null,
                 paymentMethod,
@@ -342,15 +356,31 @@ export default function RiderDashboard({ navigation }) {
                 <Text style={styles.menuIcon}>☰</Text>
             </TouchableOpacity>
 
-            {/* Map Picker Crosshair */}
+            {/* Map Picker UI Updates */}
             {isMapPickerMode && (
-                <View style={styles.mapPickerContainer} pointerEvents="none">
-                    <View style={styles.crosshairVertical} />
-                    <View style={styles.crosshairHorizontal} />
-                    <View style={styles.fixedPin}>
-                        <Text style={styles.fixedPinIcon}>📍</Text>
+                <>
+                    <View style={styles.mapPickerContainer} pointerEvents="none">
+                        <View style={styles.crosshairVertical} />
+                        <View style={styles.crosshairHorizontal} />
+                        <View style={styles.fixedPin}>
+                            <Text style={styles.fixedPinIcon}>📍</Text>
+                            <View style={styles.pinPulse} />
+                        </View>
                     </View>
-                </View>
+
+                    {/* Real-time Metrics Info Box */}
+                    <View style={styles.pickerMetricsBox}>
+                        <View style={styles.metricItem}>
+                            <Text style={styles.metricEmoji}>📏</Text>
+                            <Text style={styles.metricValue}>{routeInfo.distance} km</Text>
+                        </View>
+                        <View style={styles.metricDivider} />
+                        <View style={styles.metricItem}>
+                            <Text style={styles.metricEmoji}>⏱️</Text>
+                            <Text style={styles.metricValue}>{routeInfo.duration} min</Text>
+                        </View>
+                    </View>
+                </>
             )}
 
             {isMapPickerMode && (
@@ -518,6 +548,8 @@ export default function RiderDashboard({ navigation }) {
                         <TouchableOpacity
                             style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
                             activeOpacity={0.8}
+                            onPress={sendRideRequest}
+                            disabled={rideStatus === 'searching'}
                         >
                             <Text style={styles.sendBtnText}>
                                 {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
@@ -565,6 +597,26 @@ export default function RiderDashboard({ navigation }) {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* Searching Overlay */}
+            {rideStatus === 'searching' && (
+                <View style={styles.searchingOverlay}>
+                    <View style={styles.searchingCard}>
+                        <View style={styles.searchingPulse}>
+                            <Text style={styles.searchingEmoji}>🚗</Text>
+                        </View>
+                        <Text style={styles.searchingTitle}>Buscando Conductores</Text>
+                        <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard...</Text>
+
+                        <TouchableOpacity
+                            style={styles.cancelRequestBtn}
+                            onPress={() => setRideStatus(null)}
+                        >
+                            <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -1059,6 +1111,107 @@ const styles = StyleSheet.create({
         textShadowColor: 'rgba(0, 0, 0, 0.4)',
         textShadowOffset: { width: 0, height: 4 },
         textShadowRadius: 6,
+        zIndex: 2,
+    },
+    pinPulse: {
+        position: 'absolute',
+        width: 20,
+        height: 10,
+        backgroundColor: 'rgba(255, 107, 53, 0.4)',
+        borderRadius: 10,
+        bottom: -5,
+        transform: [{ scaleX: 2 }],
+    },
+    pickerMetricsBox: {
+        position: 'absolute',
+        top: 150,
+        flexDirection: 'row',
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.accent,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+        zIndex: 200,
+    },
+    metricItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    metricEmoji: {
+        fontSize: 14,
+    },
+    metricValue: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    metricDivider: {
+        width: 1,
+        height: 15,
+        backgroundColor: COLORS.border,
+        marginHorizontal: 12,
+    },
+    searchingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+    },
+    searchingCard: {
+        backgroundColor: COLORS.bgSecondary,
+        width: width * 0.85,
+        borderRadius: RADIUS.xl,
+        padding: 30,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.accent + '44',
+    },
+    searchingPulse: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: COLORS.accent + '22',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    searchingEmoji: {
+        fontSize: 40,
+    },
+    searchingTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    searchingSub: {
+        fontSize: 14,
+        color: COLORS.textMuted,
+        textAlign: 'center',
+        marginBottom: 30,
+        lineHeight: 20,
+    },
+    cancelRequestBtn: {
+        paddingVertical: 12,
+        paddingHorizontal: 25,
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
+    cancelRequestText: {
+        color: COLORS.error,
+        fontWeight: 'bold',
+        fontSize: 14,
     },
     confirmMapPicker: {
         position: 'absolute',
