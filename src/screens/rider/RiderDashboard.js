@@ -5,16 +5,15 @@ import {
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
-import { getCurrentLocation, watchLocation, calculateDistance, reverseGeocode } from '../../lib/geo';
+import {
+    getCurrentLocation, watchLocation, calculateDistance,
+    searchPlaces, getPlaceDetails, reverseGeocode
+} from '../../lib/geo';
 import { calculateSuggestedPrice, generatePriceSuggestions, formatPrice } from '../../lib/pricing';
 import { db } from '../../lib/firebase';
 import {
     collection, query, where, onSnapshot, addDoc, serverTimestamp,
 } from 'firebase/firestore';
-import {
-    getCurrentLocation, watchLocation, calculateDistance,
-    searchPlaces, getPlaceDetails
-} from '../../lib/geo';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
 
 const { width, height } = Dimensions.get('window');
