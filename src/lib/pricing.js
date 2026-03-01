@@ -7,18 +7,25 @@ const PER_MINUTE = 60;      // ₡50 por minuto estimado
 const MIN_FARE = 1000;      // ₡1,000 tarifa mínima
 const COMMISSION_RATE = 0.01; // 1% comisión de la plataforma
 
-/**
- * Calculate suggested price based on distance
- * @param {number} distanceKm - distance in kilometers
- * @returns {object} pricing breakdown
- */
 export function calculateSuggestedPrice(distanceKm) {
     // Estimate time: average 30km/h in city → minutes = (distance / 30) * 60
-    const estimatedMinutes = Math.round((distanceKm / 30) * 60);
+    const estimatedMinutes = Math.max(2, Math.round((distanceKm / 30) * 60));
+
+    // Determine traffic multiplier based on time of day
+    // Peak hours: 7-9 AM, 5-7 PM
+    const now = new Date();
+    const hour = now.getHours();
+    let trafficMultiplier = 1.0;
+
+    if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
+        trafficMultiplier = 1.3; // 30% increase during peak hours
+    } else if (hour >= 22 || hour <= 5) {
+        trafficMultiplier = 1.2; // 20% increase for night service
+    }
 
     const distanceCost = Math.round(distanceKm * PER_KM);
     const timeCost = Math.round(estimatedMinutes * PER_MINUTE);
-    const subtotal = BASE_FARE + distanceCost + timeCost;
+    const subtotal = (BASE_FARE + distanceCost + timeCost) * trafficMultiplier;
     const total = Math.max(subtotal, MIN_FARE);
 
     // Round to nearest 100 colones
@@ -31,6 +38,7 @@ export function calculateSuggestedPrice(distanceKm) {
         distanceKm: Math.round(distanceKm * 10) / 10,
         estimatedMinutes,
         suggestedPrice: roundedTotal,
+        trafficMultiplier: trafficMultiplier > 1 ? `${Math.round((trafficMultiplier - 1) * 100)}% extra` : null
     };
 }
 

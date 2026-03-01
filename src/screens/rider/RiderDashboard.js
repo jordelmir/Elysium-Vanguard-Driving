@@ -11,6 +11,10 @@ import { db } from '../../lib/firebase';
 import {
     collection, query, where, onSnapshot, addDoc, serverTimestamp,
 } from 'firebase/firestore';
+import {
+    getCurrentLocation, watchLocation, calculateDistance,
+    searchPlaces, getPlaceDetails
+} from '../../lib/geo';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
 
 const { width, height } = Dimensions.get('window');
@@ -36,6 +40,11 @@ export default function RiderDashboard({ navigation }) {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [showMenu, setShowMenu] = useState(false);
     const [rideStatus, setRideStatus] = useState(null); // null, 'searching', 'found'
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const [isMapPickerMode, setIsMapPickerMode] = useState(false);
+    const [mapRegion, setMapRegion] = useState(null);
 
     // Get current location and watch for changes
     useEffect(() => {
@@ -85,29 +94,85 @@ export default function RiderDashboard({ navigation }) {
         return unsubscribe;
     }, []);
 
-    // Handle map tap to set destination
+    // Handle map movement for Map Picker
     const handleMapMessage = async (message) => {
-        if (message.event === 'onMapClicked' && showPanel) {
-            const { lat, lng } = message.payload;
-            const latitude = lat;
-            const longitude = lng;
-
-            setDestination({ latitude, longitude });
-            const addr = await reverseGeocode(latitude, longitude);
-            setDestinationName(addr);
-
-            if (myLocation) {
-                const dist = calculateDistance(
-                    myLocation.latitude, myLocation.longitude,
-                    latitude, longitude
-                );
-                const pricing = calculateSuggestedPrice(dist);
-                const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
-                setPriceSuggestions(suggestions);
-                setSelectedPrice(pricing.suggestedPrice);
-                setCustomPrice(pricing.suggestedPrice.toString());
+        if (message.event === 'onMapClicked') {
+            if (showPanel && !isMapPickerMode) {
+                const { lat, lng } = message.payload;
+                updateDestination(lat, lng);
             }
+        } else if (message.event === 'onMoveEnd' && isMapPickerMode) {
+            const { lat, lng } = message.payload;
+            updateDestination(lat, lng, true);
         }
+    };
+
+    const updateDestination = async (lat, lng, isSilent = false) => {
+        const latitude = lat;
+        const longitude = lng;
+
+        setDestination({ latitude, longitude });
+        if (!isSilent) {
+            const details = await getPlaceDetails(latitude, longitude);
+            setDestinationName(details.address);
+        }
+
+        if (myLocation) {
+            const dist = calculateDistance(
+                myLocation.latitude, myLocation.longitude,
+                latitude, longitude
+            );
+            const pricing = calculateSuggestedPrice(dist);
+            const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+            setPriceSuggestions(suggestions);
+            setSelectedPrice(pricing.suggestedPrice);
+            setCustomPrice(pricing.suggestedPrice.toString());
+        }
+    };
+
+    // Search logic
+    useEffect(() => {
+        const delaySearch = setTimeout(async () => {
+            if (searchQuery.length >= 3) {
+                setIsSearching(true);
+                const results = await searchPlaces(searchQuery);
+                setSearchResults(results);
+                setIsSearching(false);
+            } else {
+                setSearchResults([]);
+            }
+        }, 500);
+
+        return () => clearTimeout(delaySearch);
+    }, [searchQuery]);
+
+    const selectSearchResult = (item) => {
+        setDestination({ latitude: item.latitude, longitude: item.longitude });
+        setDestinationName(item.name);
+        setSearchQuery('');
+        setSearchResults([]);
+
+        // Animate map to destination
+        if (mapRef.current) {
+            mapRef.current.injectJavaScript(`
+                window.map.flyTo([${item.latitude}, ${item.longitude}], 16);
+            `);
+        }
+
+        // Update pricing
+        if (myLocation) {
+            const dist = calculateDistance(
+                myLocation.latitude, myLocation.longitude,
+                item.latitude, item.longitude
+            );
+            const pricing = calculateSuggestedPrice(dist);
+            const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+            setPriceSuggestions(suggestions);
+            setSelectedPrice(pricing.suggestedPrice);
+            setCustomPrice(pricing.suggestedPrice.toString());
+        }
+
+        if (!showPanel) togglePanel();
     };
 
     // Toggle request panel
@@ -237,17 +302,71 @@ export default function RiderDashboard({ navigation }) {
                 </View>
             )}
 
-            {/* Top bar */}
-            <View style={styles.topBar}>
-                <TouchableOpacity style={styles.menuBtn} onPress={() => setShowMenu(true)}>
-                    <Text style={styles.menuIcon}>☰</Text>
-                </TouchableOpacity>
-
-                <View style={styles.earningsBadge}>
-                    <Text style={styles.earningsText}>₡0</Text>
-                    <Text style={styles.earningsIcon}>▼</Text>
+            {/* Search Bar */}
+            <View style={styles.searchContainer}>
+                <View style={styles.searchInputWrapper}>
+                    <Text style={styles.searchIcon}>🔍</Text>
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="¿A dónde vamos?"
+                        placeholderTextColor={COLORS.textMuted}
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                            <Text style={styles.clearIcon}>✕</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
+
+                {searchResults.length > 0 && (
+                    <View style={styles.resultsContainer}>
+                        {searchResults.map((item) => (
+                            <TouchableOpacity
+                                key={item.id}
+                                style={styles.resultItem}
+                                onPress={() => selectSearchResult(item)}
+                            >
+                                <Text style={styles.resultPin}>📍</Text>
+                                <View style={styles.resultInfo}>
+                                    <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
+                                    <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
             </View>
+
+            <TouchableOpacity style={styles.menuBtn} onPress={() => setShowMenu(true)}>
+                <Text style={styles.menuIcon}>☰</Text>
+            </TouchableOpacity>
+
+            {/* Map Picker Crosshair */}
+            {isMapPickerMode && (
+                <View style={styles.mapPickerContainer} pointerEvents="none">
+                    <View style={styles.crosshairVertical} />
+                    <View style={styles.crosshairHorizontal} />
+                    <View style={styles.fixedPin}>
+                        <Text style={styles.fixedPinIcon}>📍</Text>
+                    </View>
+                </View>
+            )}
+
+            {isMapPickerMode && (
+                <TouchableOpacity
+                    style={styles.confirmMapPicker}
+                    onPress={async () => {
+                        setIsMapPickerMode(false);
+                        const details = await getPlaceDetails(destination.latitude, destination.longitude);
+                        setDestinationName(details.address);
+                        if (!showPanel) togglePanel();
+                    }}
+                >
+                    <Text style={styles.confirmMapPickerText}>Confirmar Destino</Text>
+                </TouchableOpacity>
+            )}
 
             {/* Bottom action button */}
             <View style={styles.bottomSection}>
@@ -308,9 +427,14 @@ export default function RiderDashboard({ navigation }) {
                     <View style={styles.locationRow}>
                         <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
                         <View style={styles.locationInfo}>
-                            <Text style={styles.locationLabel}>Destino</Text>
-                            <Text style={styles.locationName}>
-                                {destinationName || 'Toca el mapa para seleccionar'}
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={styles.locationLabel}>Destino</Text>
+                                <TouchableOpacity onPress={() => setIsMapPickerMode(true)}>
+                                    <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.locationName} numberOfLines={2}>
+                                {destinationName || 'Selecciona un destino'}
                             </Text>
                         </View>
                     </View>
@@ -836,5 +960,131 @@ const styles = StyleSheet.create({
         shadowRadius: 3,
         borderWidth: 1,
         borderColor: COLORS.accent + '44',
+    },
+    searchContainer: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 60 : 40,
+        left: 70,
+        right: SPACING.md,
+        zIndex: 100,
+    },
+    searchInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
+        paddingHorizontal: SPACING.md,
+        paddingVertical: 12,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    searchIcon: {
+        fontSize: 16,
+        marginRight: 10,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 16,
+        color: COLORS.textPrimary,
+        fontWeight: '500',
+    },
+    clearIcon: {
+        fontSize: 18,
+        color: COLORS.textMuted,
+        padding: 5,
+    },
+    resultsContainer: {
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
+        marginTop: 8,
+        padding: 5,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        maxHeight: 250,
+        overflow: 'hidden',
+    },
+    resultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border + '22',
+    },
+    resultPin: {
+        fontSize: 18,
+        marginRight: 12,
+    },
+    resultInfo: {
+        flex: 1,
+    },
+    resultName: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+    },
+    resultAddress: {
+        fontSize: 12,
+        color: COLORS.textMuted,
+        marginTop: 2,
+    },
+    mapPickerContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 50,
+    },
+    crosshairVertical: {
+        position: 'absolute',
+        width: 1,
+        height: 60,
+        backgroundColor: COLORS.accent,
+        opacity: 0.5,
+    },
+    crosshairHorizontal: {
+        position: 'absolute',
+        width: 60,
+        height: 1,
+        backgroundColor: COLORS.accent,
+        opacity: 0.5,
+    },
+    fixedPin: {
+        marginTop: -32, // Offset for pin point
+    },
+    fixedPinIcon: {
+        fontSize: 40,
+        textShadowColor: 'rgba(0, 0, 0, 0.4)',
+        textShadowOffset: { width: 0, height: 4 },
+        textShadowRadius: 6,
+    },
+    confirmMapPicker: {
+        position: 'absolute',
+        bottom: 40,
+        left: SPACING.xl,
+        right: SPACING.xl,
+        backgroundColor: COLORS.accent,
+        paddingVertical: 16,
+        borderRadius: RADIUS.xl,
+        alignItems: 'center',
+        shadowColor: COLORS.accent,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 8,
+        zIndex: 200,
+    },
+    confirmMapPickerText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    mapPickText: {
+        fontSize: 12,
+        color: COLORS.accent,
+        fontWeight: 'bold',
     },
 });

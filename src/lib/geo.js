@@ -79,7 +79,78 @@ function toRad(deg) {
 }
 
 /**
- * Reverse geocode coordinates to address
+ * Search for places using OpenStreetMap Nominatim API
+ * @param {string} query - The search query
+ * @returns {Promise<Array>} List of matching places
+ */
+export async function searchPlaces(query) {
+    if (!query || query.length < 3) return [];
+
+    try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'ElysiumVanguardDriving/1.0',
+            },
+        });
+        const data = await response.json();
+
+        return data.map((item) => ({
+            id: item.place_id,
+            name: item.display_name,
+            shortName: item.name || item.display_name.split(',')[0],
+            latitude: parseFloat(item.lat),
+            longitude: parseFloat(item.lon),
+            address: item.display_name,
+        }));
+    } catch (error) {
+        console.error('Error searching places:', error);
+        return [];
+    }
+}
+
+/**
+ * Get place details (reverse geocode) using Nominatim
+ */
+export async function getPlaceDetails(latitude, longitude) {
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'ElysiumVanguardDriving/1.0',
+            },
+        });
+        const data = await response.json();
+
+        if (data && data.display_name) {
+            return {
+                name: data.name || data.display_name.split(',')[0],
+                address: data.display_name,
+                latitude,
+                longitude,
+            };
+        }
+
+        // Fallback to coordinates
+        return {
+            name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            latitude,
+            longitude,
+        };
+    } catch (error) {
+        console.error('Error getting place details:', error);
+        return {
+            name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            latitude,
+            longitude,
+        };
+    }
+}
+
+/**
+ * Reverse geocode coordinates to address (Legacy fallback using Expo)
  */
 export async function reverseGeocode(latitude, longitude) {
     try {
