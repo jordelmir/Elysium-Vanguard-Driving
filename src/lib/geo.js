@@ -170,3 +170,30 @@ export async function reverseGeocode(latitude, longitude) {
         return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
 }
+/**
+ * Get route between two points using OSRM
+ * @returns {Promise<Object>} { coordinates, distance, duration }
+ */
+export async function getRoute(lat1, lon1, lat2, lon2) {
+    try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code === 'Ok' && data.routes.length > 0) {
+            const route = data.routes[0];
+            return {
+                coordinates: route.geometry.coordinates.map(coord => ({
+                    lat: coord[1],
+                    lng: coord[0]
+                })),
+                distance: route.distance / 1000, // km
+                duration: route.duration / 60,   // min
+            };
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting route:', error);
+        return null;
+    }
+}

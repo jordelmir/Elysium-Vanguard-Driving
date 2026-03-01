@@ -7,7 +7,7 @@ import { LeafletView } from 'react-native-leaflet-view';
 import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
 import {
     getCurrentLocation, watchLocation, calculateDistance,
-    searchPlaces, getPlaceDetails, reverseGeocode
+    searchPlaces, getPlaceDetails, reverseGeocode, getRoute
 } from '../../lib/geo';
 import { calculateSuggestedPrice, generatePriceSuggestions, formatPrice } from '../../lib/pricing';
 import { db } from '../../lib/firebase';
@@ -43,6 +43,7 @@ export default function RiderDashboard({ navigation }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
+    const [routeCoordinates, setRouteCoordinates] = useState([]);
     const progressAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -182,19 +183,34 @@ export default function RiderDashboard({ navigation }) {
         }
 
         if (myLocation) {
-            const dist = calculateDistance(
-                myLocation.latitude, myLocation.longitude,
-                item.latitude, item.longitude
-            );
-            const pricing = calculateSuggestedPrice(dist || 0);
-            setRouteInfo({
-                distance: pricing.distanceKm || 0,
-                duration: pricing.estimatedMinutes || 2
-            });
-            const suggestions = generatePriceSuggestions(pricing.suggestedPrice || 1000);
-            setPriceSuggestions(suggestions);
-            setSelectedPrice(pricing.suggestedPrice || 1000);
-            setCustomPrice((pricing.suggestedPrice || 1000).toString());
+            const fetchRoute = async () => {
+                const route = await getRoute(myLocation.latitude, myLocation.longitude, item.latitude, item.longitude);
+                if (route) {
+                    setRouteInfo({
+                        distance: parseFloat(route.distance.toFixed(2)),
+                        duration: Math.ceil(route.duration)
+                    });
+                    setRouteCoordinates(route.coordinates);
+
+                    const pricing = calculateSuggestedPrice(route.distance);
+                    const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+                    setPriceSuggestions(suggestions);
+                    setSelectedPrice(pricing.suggestedPrice);
+                    setCustomPrice(pricing.suggestedPrice.toString());
+                } else {
+                    const dist = calculateDistance(
+                        myLocation.latitude, myLocation.longitude,
+                        item.latitude, item.longitude
+                    );
+                    const pricing = calculateSuggestedPrice(dist || 0);
+                    setRouteInfo({
+                        distance: pricing.distanceKm || 0,
+                        duration: pricing.estimatedMinutes || 2
+                    });
+                    setRouteCoordinates([]);
+                }
+            };
+            fetchRoute();
         }
 
         if (!showPanel) togglePanel();
