@@ -176,7 +176,11 @@ export default function RiderDashboard({ navigation }) {
         const delaySearch = setTimeout(async () => {
             if (searchQuery.length >= 3) {
                 setIsSearching(true);
-                const results = await searchPlaces(searchQuery);
+                const results = await searchPlaces(
+                    searchQuery,
+                    myLocation?.latitude,
+                    myLocation?.longitude
+                );
                 setSearchResults(results);
                 setIsSearching(false);
             } else {

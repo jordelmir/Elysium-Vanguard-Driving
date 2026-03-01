@@ -83,11 +83,18 @@ function toRad(deg) {
  * @param {string} query - The search query
  * @returns {Promise<Array>} List of matching places
  */
-export async function searchPlaces(query) {
+export async function searchPlaces(query, lat, lon) {
     if (!query || query.length < 3) return [];
 
     try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=cr`;
+        // Use a broader limit and prioritize Costa Rica with viewbox and countrycodes
+        // viewbox: [min_lon, max_lat, max_lon, min_lat] for Costa Rica
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=15&addressdetails=1&countrycodes=cr&viewbox=-85.95,11.22,-82.55,8.03&bounded=1`;
+
+        if (lat && lon) {
+            url += `&lat=${lat}&lon=${lon}`;
+        }
+
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'ElysiumVanguardDriving/1.0',
@@ -98,7 +105,7 @@ export async function searchPlaces(query) {
         return data.map((item) => ({
             id: item.place_id,
             name: item.display_name,
-            shortName: item.name || item.display_name.split(',')[0],
+            shortName: item.name || (item.display_name.split(',')[0]),
             latitude: parseFloat(item.lat),
             longitude: parseFloat(item.lon),
             address: item.display_name,
