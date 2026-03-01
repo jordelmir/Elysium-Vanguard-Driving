@@ -117,8 +117,10 @@ export default function RiderDashboard({ navigation }) {
             }
         } else if (message.event === 'onMoveEnd' && isMapPickerMode) {
             const { lat, lng } = message.payload;
-            // Debounced/Buffered update for smooth tuning
-            updateDestination(lat, lng, true);
+            if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+                // Debounced/Buffered update for smooth tuning
+                updateDestination(lat, lng, true);
+            }
         }
     };
 
@@ -462,7 +464,12 @@ export default function RiderDashboard({ navigation }) {
                             <View style={styles.locationInfo}>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <Text style={styles.locationLabel}>Destino</Text>
-                                    <TouchableOpacity onPress={() => setIsMapPickerMode(true)}>
+                                    <TouchableOpacity onPress={() => {
+                                        if (!destination && myLocation) {
+                                            setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
+                                        }
+                                        setIsMapPickerMode(true);
+                                    }}>
                                         <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
                                     </TouchableOpacity>
                                 </View>
