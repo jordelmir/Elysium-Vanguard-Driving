@@ -583,45 +583,64 @@ export default function RiderDashboard({ navigation }) {
                                 </View>
                             </View>
 
-                            {priceSuggestions.length > 0 && (
-                                <View style={styles.priceSection}>
-                                    <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
-                                    <View style={styles.priceGrid}>
-                                        {priceSuggestions.map((item, index) => (
-                                            <TouchableOpacity
-                                                key={index}
-                                                style={[
-                                                    styles.priceSuggestion,
-                                                    selectedPrice === item.price && styles.priceChipActive,
-                                                ]}
-                                                onPress={() => {
-                                                    setSelectedPrice(item.price);
-                                                    setCustomPrice(item.price.toString());
-                                                }}
+                            <ScrollView
+                                horizontal={true}
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={{ paddingVertical: 10 }}
+                            >
+                                {priceSuggestions.length > 0 && (
+                                    <View style={styles.priceSection}>
+                                        <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
+                                        <View style={styles.priceGrid}>
+                                            {priceSuggestions.map((item, index) => (
+                                                <TouchableOpacity
+                                                    key={index}
+                                                    style={[
+                                                        styles.priceSuggestion,
+                                                        selectedPrice === item.price && styles.priceChipActive,
+                                                    ]}
+                                                    onPress={() => {
+                                                        setSelectedPrice(item.price);
+                                                        setCustomPrice(item.price.toString());
+                                                    }}
+                                                >
+                                                    <Text style={[
+                                                        styles.priceChipText,
+                                                        selectedPrice === item.price && styles.priceChipTextActive
+                                                    ]}>
+                                                        {item.label}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+                            </ScrollView>
                                             >
-                                                <Text style={[
-                                                    styles.priceText,
-                                                    selectedPrice === item.price && { color: COLORS.accent },
-                                                ]}>
-                                                    {item.label} ({formatPrice(item.price)})
-                                                </Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </View>
+                            <Text style={[
+                                styles.priceText,
+                                selectedPrice === item.price && { color: COLORS.accent },
+                            ]}>
+                                {item.label} ({formatPrice(item.price)})
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
 
-                                    <View style={styles.customPriceRow}>
-                                        <Text style={styles.currencySymbol}>₡</Text>
-                                        <TextInput
-                                            style={styles.customPriceInput}
-                                            value={customPrice}
-                                            onChangeText={setCustomPrice}
-                                            keyboardType="numeric"
-                                            placeholder="Precio personalizado"
-                                            placeholderTextColor={COLORS.textMuted}
-                                        />
-                                    </View>
-                                </View>
-                            )}
+                <View style={styles.customPriceRow}>
+                    <Text style={styles.currencySymbol}>₡</Text>
+                    <TextInput
+                        style={styles.customPriceInput}
+                        value={customPrice}
+                        onChangeText={setCustomPrice}
+                        keyboardType="numeric"
+                        placeholder="Precio personalizado"
+                        placeholderTextColor={COLORS.textMuted}
+                    />
+                </View>
+        </View>
+    )
+}
 
                             <View style={styles.paymentRow}>
                                 <TouchableOpacity
@@ -655,86 +674,88 @@ export default function RiderDashboard({ navigation }) {
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                        </Animated.View>
+                        </Animated.View >
                     )}
+                </View >
+
+    <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
+            <View style={styles.menuContent}>
+                <View style={styles.menuHeader}>
+                    <View style={styles.userAvatarLarge}>
+                        <Text style={{ fontSize: 40 }}>👤</Text>
+                    </View>
+                    <Text style={styles.menuUserName}>{userData?.name || 'Usuario'}</Text>
+                    <View style={styles.ratingBadgeContainer}>
+                        <Text style={styles.ratingPercent}>
+                            ⭐ {calculateRatingPercentage(userData?.rating || 5.0)}
+                        </Text>
+                        <View style={styles.recommendedBadge}>
+                            <Text style={styles.recommendedText}>¡Pasajero Recomendado!</Text>
+                        </View>
+                    </View>
+                </View>
+                <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                        setShowMenu(false);
+                        navigation.navigate('RiderHistory');
+                    }}
+                >
+                    <Text style={styles.menuItemIcon}>📋</Text>
+                    <Text style={styles.menuItemText}>Mis viajes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.menuItem} onPress={logout}>
+                    <Text style={styles.menuItemIcon}>🚪</Text>
+                    <Text style={styles.menuItemText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+    </Modal>
+
+{
+    rideStatus === 'searching' && (
+        <Animated.View style={[styles.searchingOverlay, { opacity: slideAnim }]}>
+            <View style={styles.searchingCard}>
+                <Animated.View style={[styles.searchingPulse, {
+                    transform: [{
+                        scale: slideAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.8, 1.2]
+                        })
+                    }]
+                }]}>
+                    <Text style={styles.searchingEmoji}>🚗</Text>
+                </Animated.View>
+                <Text style={styles.searchingTitle}>Buscando Conductores</Text>
+                <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
+
+                <View style={styles.searchingProgressContainer}>
+                    <Animated.View style={[styles.searchingProgressBar, {
+                        transform: [{
+                            translateX: progressAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [-width * 0.4, width * 0.85]
+                            })
+                        }]
+                    }]} />
                 </View>
 
-                <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
-                    <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
-                        <View style={styles.menuContent}>
-                            <View style={styles.menuHeader}>
-                                <View style={styles.userAvatarLarge}>
-                                    <Text style={{ fontSize: 40 }}>👤</Text>
-                                </View>
-                                <Text style={styles.menuUserName}>{userData?.name || 'Usuario'}</Text>
-                                <View style={styles.ratingBadgeContainer}>
-                                    <Text style={styles.ratingPercent}>
-                                        ⭐ {calculateRatingPercentage(userData?.rating || 5.0)}
-                                    </Text>
-                                    <View style={styles.recommendedBadge}>
-                                        <Text style={styles.recommendedText}>¡Pasajero Recomendado!</Text>
-                                    </View>
-                                </View>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.menuItem}
-                                onPress={() => {
-                                    setShowMenu(false);
-                                    navigation.navigate('RiderHistory');
-                                }}
-                            >
-                                <Text style={styles.menuItemIcon}>📋</Text>
-                                <Text style={styles.menuItemText}>Mis viajes</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.menuItem} onPress={logout}>
-                                <Text style={styles.menuItemIcon}>🚪</Text>
-                                <Text style={styles.menuItemText}>Cerrar sesión</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableOpacity>
-                </Modal>
-
-                {rideStatus === 'searching' && (
-                    <Animated.View style={[styles.searchingOverlay, { opacity: slideAnim }]}>
-                        <View style={styles.searchingCard}>
-                            <Animated.View style={[styles.searchingPulse, {
-                                transform: [{
-                                    scale: slideAnim.interpolate({
-                                        inputRange: [0, 1],
-                                        outputRange: [0.8, 1.2]
-                                    })
-                                }]
-                            }]}>
-                                <Text style={styles.searchingEmoji}>🚗</Text>
-                            </Animated.View>
-                            <Text style={styles.searchingTitle}>Buscando Conductores</Text>
-                            <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
-
-                            <View style={styles.searchingProgressContainer}>
-                                <Animated.View style={[styles.searchingProgressBar, {
-                                    transform: [{
-                                        translateX: progressAnim.interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-width * 0.4, width * 0.85]
-                                        })
-                                    }]
-                                }]} />
-                            </View>
-
-                            <TouchableOpacity
-                                style={styles.cancelRequestBtn}
-                                onPress={() => {
-                                    setRideStatus(null);
-                                    // Reset animations if needed
-                                }}
-                            >
-                                <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-                )}
-            </KeyboardAvoidingView>
-        </View>
+                <TouchableOpacity
+                    style={styles.cancelRequestBtn}
+                    onPress={() => {
+                        setRideStatus(null);
+                        // Reset animations if needed
+                    }}
+                >
+                    <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
+                </TouchableOpacity>
+            </View>
+        </Animated.View>
+    )
+}
+            </KeyboardAvoidingView >
+        </View >
     );
 }
 
@@ -1202,6 +1223,25 @@ const styles = StyleSheet.create({
     metricItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     metricEmoji: { fontSize: 14 },
     metricDivider: { width: 1, height: 20, backgroundColor: COLORS.border, marginHorizontal: 15 },
+    confirmMapPicker: {
+        position: 'absolute',
+        bottom: 50,
+        left: 20,
+        right: 20,
+        backgroundColor: COLORS.accent,
+        padding: 15,
+        borderRadius: RADIUS.lg,
+        alignItems: 'center',
+        ...Platform.select({
+            ios: {
+                shadowColor: COLORS.accent,
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.4,
+                shadowRadius: 8,
+            },
+            android: { elevation: 12 },
+        }),
+    },
     confirmMapPickerText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 
     // Professional Map Controls
