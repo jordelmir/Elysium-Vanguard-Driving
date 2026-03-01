@@ -43,6 +43,28 @@ export default function RiderDashboard({ navigation }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
+    const progressAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (rideStatus === 'searching') {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(progressAnim, {
+                        toValue: 1,
+                        duration: 1500,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(progressAnim, {
+                        toValue: 0,
+                        duration: 0,
+                        useNativeDriver: true,
+                    })
+                ])
+            ).start();
+        } else {
+            progressAnim.setValue(0);
+        }
+    }, [rideStatus]);
 
     useEffect(() => {
         let subscription;
@@ -95,6 +117,7 @@ export default function RiderDashboard({ navigation }) {
             }
         } else if (message.event === 'onMoveEnd' && isMapPickerMode) {
             const { lat, lng } = message.payload;
+            // Debounced/Buffered update for smooth tuning
             updateDestination(lat, lng, true);
         }
     };
@@ -180,8 +203,8 @@ export default function RiderDashboard({ navigation }) {
         Animated.spring(slideAnim, {
             toValue,
             useNativeDriver: true,
-            tension: 50,
-            friction: 8,
+            damping: 15,
+            stiffness: 90,
         }).start();
         setShowPanel(!showPanel);
     };
@@ -302,10 +325,13 @@ export default function RiderDashboard({ navigation }) {
                     <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="¿A dónde vamos?"
+                        placeholder="📍 ¿A dónde vamos en CR?"
                         placeholderTextColor={COLORS.textMuted}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
+                        onFocus={() => {
+                            if (!showPanel) togglePanel();
+                        }}
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -315,7 +341,7 @@ export default function RiderDashboard({ navigation }) {
                 </View>
 
                 {searchResults.length > 0 && (
-                    <View style={styles.resultsContainer}>
+                    <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
                         <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
                             <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
                             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
@@ -338,7 +364,7 @@ export default function RiderDashboard({ navigation }) {
                                 </View>
                             </TouchableOpacity>
                         ))}
-                    </View>
+                    </Animated.View>
                 )}
             </View>
 
@@ -388,28 +414,16 @@ export default function RiderDashboard({ navigation }) {
             )}
 
             <View style={styles.bottomSection}>
-                {!showPanel && !isMapPickerMode ? (
-                    <TouchableOpacity
-                        style={styles.whereToBtn}
-                        onPress={togglePanel}
-                        activeOpacity={0.9}
-                    >
-                        <Text style={styles.whereToIcon}>📍</Text>
-                        <Text style={styles.whereToText}>¿A dónde vas?</Text>
-                        <Text style={styles.whereToArrow}>→</Text>
-                    </TouchableOpacity>
-                ) : null}
-
                 {!showPanel && (
                     <TouchableOpacity
-                        style={styles.recenterButton}
+                        style={[styles.recenterButton, { bottom: isMapPickerMode ? 130 : 20 }]}
                         onPress={async () => {
                             try {
                                 const loc = await getCurrentLocation();
                                 setMyLocation(loc);
                                 if (mapRef.current) {
                                     mapRef.current.injectJavaScript(`
-                                        window.map.setView([${loc.latitude}, ${loc.longitude}], 16);
+                                        window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
                                     `);
                                 }
                                 const addr = await reverseGeocode(loc.latitude, loc.longitude);
@@ -419,9 +433,10 @@ export default function RiderDashboard({ navigation }) {
                             }
                         }}
                     >
-                        <Text style={{ fontSize: 20 }}>🎯</Text>
+                        <Text style={{ fontSize: 24 }}>🎯</Text>
                     </TouchableOpacity>
                 )}
+
 
                 <Animated.View
                     style={[
@@ -557,18 +572,43 @@ export default function RiderDashboard({ navigation }) {
             </Modal>
 
             {rideStatus === 'searching' && (
-                <View style={styles.searchingOverlay}>
+                <Animated.View style={[styles.searchingOverlay, { opacity: slideAnim }]}>
                     <View style={styles.searchingCard}>
-                        <View style={styles.searchingPulse}>
+                        <Animated.View style={[styles.searchingPulse, {
+                            transform: [{
+                                scale: slideAnim.interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: [0.8, 1.2]
+                                })
+                            }]
+                        }]}>
                             <Text style={styles.searchingEmoji}>🚗</Text>
-                        </View>
+                        </Animated.View>
                         <Text style={styles.searchingTitle}>Buscando Conductores</Text>
-                        <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard...</Text>
-                        <TouchableOpacity style={styles.cancelRequestBtn} onPress={() => setRideStatus(null)}>
+                        <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
+
+                        <View style={styles.searchingProgressContainer}>
+                            <Animated.View style={[styles.searchingProgressBar, {
+                                transform: [{
+                                    translateX: progressAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [-width * 0.4, width * 0.85]
+                                    })
+                                }]
+                            }]} />
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.cancelRequestBtn}
+                            onPress={() => {
+                                setRideStatus(null);
+                                // Reset animations if needed
+                            }}
+                        >
                             <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </Animated.View>
             )}
         </View>
     );
@@ -983,6 +1023,20 @@ const styles = StyleSheet.create({
     searchingEmoji: { fontSize: 40 },
     searchingTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 10 },
     searchingSub: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginBottom: 30 },
+    searchingProgressContainer: {
+        width: '100%',
+        height: 4,
+        backgroundColor: COLORS.border,
+        borderRadius: 2,
+        overflow: 'hidden',
+        marginVertical: 20,
+    },
+    searchingProgressBar: {
+        width: '40%',
+        height: '100%',
+        backgroundColor: COLORS.accent,
+        borderRadius: 2,
+    },
     cancelRequestBtn: {
         paddingVertical: 12,
         paddingHorizontal: 25,

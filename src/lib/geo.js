@@ -87,7 +87,7 @@ export async function searchPlaces(query) {
     if (!query || query.length < 3) return [];
 
     try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&countrycodes=cr`;
         const response = await fetch(url, {
             headers: {
                 'User-Agent': 'ElysiumVanguardDriving/1.0',
