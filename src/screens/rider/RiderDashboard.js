@@ -345,6 +345,7 @@ export default function RiderDashboard({ navigation }) {
                         <View style={styles.map}>
                             <LeafletView
                                 ref={mapRef}
+                                zoomControl={false}
                                 backgroundColor={COLORS.bgPrimary}
                                 onMessageReceived={handleMapMessage}
                                 mapLayers={[

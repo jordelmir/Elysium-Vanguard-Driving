@@ -88,6 +88,7 @@ export default function RideTracking({ route, navigation }) {
                 <View style={styles.map}>
                     <LeafletView
                         ref={mapRef}
+                        zoomControl={false}
                         backgroundColor={COLORS.bgPrimary}
                         mapLayers={[
                             {

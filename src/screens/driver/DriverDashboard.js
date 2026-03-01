@@ -266,6 +266,7 @@ export default function DriverDashboard({ navigation }) {
                 <View style={styles.map}>
                     <LeafletView
                         ref={mapRef}
+                        zoomControl={false}
                         backgroundColor={COLORS.bgPrimary}
                         mapLayers={[
                             {
