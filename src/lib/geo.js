@@ -157,7 +157,13 @@ export async function reverseGeocode(latitude, longitude) {
         const results = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (results.length > 0) {
             const addr = results[0];
-            return `${addr.street || ''} ${addr.streetNumber || ''}, ${addr.city || addr.subregion || ''}`.trim();
+            const parts = [
+                addr.street || '',
+                addr.streetNumber || '',
+                addr.city || addr.subregion || ''
+            ].filter(p => p.length > 0);
+
+            return parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
         }
         return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     } catch {

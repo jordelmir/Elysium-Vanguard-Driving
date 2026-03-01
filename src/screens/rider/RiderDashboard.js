@@ -134,16 +134,16 @@ export default function RiderDashboard({ navigation }) {
                 myLocation.latitude, myLocation.longitude,
                 latitude, longitude
             );
-            const pricing = calculateSuggestedPrice(dist);
+            const pricing = calculateSuggestedPrice(dist || 0);
             setRouteInfo({
-                distance: pricing.distanceKm,
-                duration: pricing.estimatedMinutes
+                distance: pricing.distanceKm || 0,
+                duration: pricing.estimatedMinutes || 2
             });
 
-            const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+            const suggestions = generatePriceSuggestions(pricing.suggestedPrice || 1000);
             setPriceSuggestions(suggestions);
-            setSelectedPrice(pricing.suggestedPrice);
-            setCustomPrice(pricing.suggestedPrice.toString());
+            setSelectedPrice(pricing.suggestedPrice || 1000);
+            setCustomPrice((pricing.suggestedPrice || 1000).toString());
         }
 
         if (!isSilent) {
@@ -184,15 +184,15 @@ export default function RiderDashboard({ navigation }) {
                 myLocation.latitude, myLocation.longitude,
                 item.latitude, item.longitude
             );
-            const pricing = calculateSuggestedPrice(dist);
+            const pricing = calculateSuggestedPrice(dist || 0);
             setRouteInfo({
-                distance: pricing.distanceKm,
-                duration: pricing.estimatedMinutes
+                distance: pricing.distanceKm || 0,
+                duration: pricing.estimatedMinutes || 2
             });
-            const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+            const suggestions = generatePriceSuggestions(pricing.suggestedPrice || 1000);
             setPriceSuggestions(suggestions);
-            setSelectedPrice(pricing.suggestedPrice);
-            setCustomPrice(pricing.suggestedPrice.toString());
+            setSelectedPrice(pricing.suggestedPrice || 1000);
+            setCustomPrice((pricing.suggestedPrice || 1000).toString());
         }
 
         if (!showPanel) togglePanel();
@@ -320,57 +320,61 @@ export default function RiderDashboard({ navigation }) {
                 </View>
             )}
 
-            <View style={styles.searchContainer}>
-                <View style={styles.searchInputWrapper}>
-                    <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="📍 ¿A dónde vamos en CR?"
-                        placeholderTextColor={COLORS.textMuted}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        onFocus={() => {
-                            if (!showPanel) togglePanel();
-                        }}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Text style={styles.clearIcon}>✕</Text>
-                        </TouchableOpacity>
+            {!isMapPickerMode && (
+                <View style={styles.searchContainer}>
+                    <View style={styles.searchInputWrapper}>
+                        <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="📍 ¿A dónde vamos en CR?"
+                            placeholderTextColor={COLORS.textMuted}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            onFocus={() => {
+                                if (!showPanel) togglePanel();
+                            }}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Text style={styles.clearIcon}>✕</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    {searchResults.length > 0 && (
+                        <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
+                            <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
+                                <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
+                                    <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
+                                    <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
+                                </View>
+                                <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
+                                <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
+                            </View>
+                            {searchResults.map((item) => (
+                                <TouchableOpacity
+                                    key={item.id}
+                                    style={styles.resultItem}
+                                    onPress={() => selectSearchResult(item)}
+                                >
+                                    <Text style={styles.resultPin}>📍</Text>
+                                    <View style={styles.resultInfo}>
+                                        <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
+                                        <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </Animated.View>
                     )}
                 </View>
+            )}
 
-                {searchResults.length > 0 && (
-                    <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
-                        <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
-                            <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
-                            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
-                                <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
-                                <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
-                            </View>
-                            <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
-                            <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
-                        </View>
-                        {searchResults.map((item) => (
-                            <TouchableOpacity
-                                key={item.id}
-                                style={styles.resultItem}
-                                onPress={() => selectSearchResult(item)}
-                            >
-                                <Text style={styles.resultPin}>📍</Text>
-                                <View style={styles.resultInfo}>
-                                    <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
-                                    <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </Animated.View>
-                )}
-            </View>
-
-            <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)}>
-                <Text style={styles.menuIcon}>☰</Text>
-            </TouchableOpacity>
+            {!isMapPickerMode && (
+                <TouchableOpacity style={styles.menuButton} onPress={() => setShowMenu(true)}>
+                    <Text style={styles.menuIcon}>☰</Text>
+                </TouchableOpacity>
+            )}
 
             {isMapPickerMode && (
                 <>

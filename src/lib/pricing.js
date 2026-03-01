@@ -23,10 +23,10 @@ export function calculateSuggestedPrice(distanceKm) {
         trafficMultiplier = 1.2; // 20% increase for night service
     }
 
-    const distanceCost = Math.round(distanceKm * PER_KM);
+    const distanceCost = Math.round((distanceKm || 0) * PER_KM);
     const timeCost = Math.round(estimatedMinutes * PER_MINUTE);
     const subtotal = (BASE_FARE + distanceCost + timeCost) * trafficMultiplier;
-    const total = Math.max(subtotal, MIN_FARE);
+    const total = Number.isNaN(subtotal) ? MIN_FARE : Math.max(subtotal, MIN_FARE);
 
     // Round to nearest 100 colones
     const roundedTotal = Math.round(total / 100) * 100;
@@ -35,9 +35,9 @@ export function calculateSuggestedPrice(distanceKm) {
         baseFare: BASE_FARE,
         distanceCost,
         timeCost,
-        distanceKm: Math.round(distanceKm * 10) / 10,
+        distanceKm: Math.round((distanceKm || 0) * 10) / 10,
         estimatedMinutes,
-        suggestedPrice: roundedTotal,
+        suggestedPrice: roundedTotal || MIN_FARE,
         trafficMultiplier: trafficMultiplier > 1 ? `${Math.round((trafficMultiplier - 1) * 100)}% extra` : null
     };
 }
