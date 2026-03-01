@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, Dimensions,
-    StatusBar, TextInput, Modal, Alert, Animated, Platform,
+    StatusBar, TextInput, Modal, Alert, Animated, Platform, ScrollView
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
@@ -140,6 +140,15 @@ export default function RiderDashboard({ navigation }) {
                 });
                 setRouteCoordinates(route.coordinates);
 
+                if (mapRef.current && route.coordinates.length > 0) {
+                    const bounds = route.coordinates.map(c => [c.lat, c.lng]);
+                    mapRef.current.injectJavaScript(`
+                        if (window.map) {
+                            window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
+                        }
+                    `);
+                }
+
                 const pricing = calculateSuggestedPrice(route.distance);
                 const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
                 setPriceSuggestions(suggestions);
@@ -199,6 +208,15 @@ export default function RiderDashboard({ navigation }) {
                         duration: Math.ceil(route.duration)
                     });
                     setRouteCoordinates(route.coordinates);
+
+                    if (mapRef.current && route.coordinates.length > 0) {
+                        const bounds = route.coordinates.map(c => [c.lat, c.lng]);
+                        mapRef.current.injectJavaScript(`
+                            if (window.map) {
+                                window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
+                            }
+                        `);
+                    }
 
                     const pricing = calculateSuggestedPrice(route.distance);
                     const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
@@ -387,19 +405,25 @@ export default function RiderDashboard({ navigation }) {
                                     <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
                                     <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
                                 </View>
-                                {searchResults.map((item) => (
-                                    <TouchableOpacity
-                                        key={item.id}
-                                        style={styles.resultItem}
-                                        onPress={() => selectSearchResult(item)}
-                                    >
-                                        <Text style={styles.resultPin}>📍</Text>
-                                        <View style={styles.resultInfo}>
-                                            <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
-                                            <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
+                                <ScrollView
+                                    style={{ maxHeight: 250 }}
+                                    showsVerticalScrollIndicator={true}
+                                    keyboardShouldPersistTaps="handled"
+                                >
+                                    {searchResults.map((item) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            style={styles.resultItem}
+                                            onPress={() => selectSearchResult(item)}
+                                        >
+                                            <Text style={styles.resultPin}>📍</Text>
+                                            <View style={styles.resultInfo}>
+                                                <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
+                                                <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
                             </Animated.View>
                         )}
                     </View>
