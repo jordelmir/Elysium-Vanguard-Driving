@@ -141,7 +141,28 @@ export default function ActiveRide({ route, navigation }) {
     };
 
     const statusInfo = getStatusInfo();
-    const destination = ride?.status === 'in_progress' ? ride?.dropoff : ride?.pickup;
+    const destination = ride?.status === 'in_progress'
+        ? (ride?.dropoffs ? ride.dropoffs[ride.dropoffs.length - 1] : ride?.dropoff)
+        : ride?.pickup;
+
+    const renderDropoffMarkers = () => {
+        if (ride?.dropoffs && ride.dropoffs.length > 0) {
+            return ride.dropoffs.map((d, index) => ({
+                id: `dropoff-loc-${index}`,
+                position: { lat: d.latitude, lng: d.longitude },
+                icon: String.fromCharCode(66 + index),
+                size: [28, 28],
+            }));
+        } else if (ride?.dropoff) {
+            return [{
+                id: 'dropoff-loc',
+                position: { lat: ride.dropoff.latitude, lng: ride.dropoff.longitude },
+                icon: '🔴',
+                size: [28, 28],
+            }];
+        }
+        return [];
+    };
 
     return (
         <View style={styles.container}>
@@ -178,12 +199,7 @@ export default function ActiveRide({ route, navigation }) {
                                 icon: '🟢',
                                 size: [28, 28],
                             }] : []),
-                            ...(ride?.dropoff ? [{
-                                id: 'dropoff-loc',
-                                position: { lat: ride.dropoff.latitude, lng: ride.dropoff.longitude },
-                                icon: '🔴',
-                                size: [28, 28],
-                            }] : [])
+                            ...renderDropoffMarkers()
                         ]}
                     />
                 </View>
@@ -244,10 +260,12 @@ export default function ActiveRide({ route, navigation }) {
                     <Text style={styles.navIcon}>{ride?.status === 'in_progress' ? '🏁' : '📍'}</Text>
                     <View style={styles.navInfo}>
                         <Text style={styles.navLabel}>
-                            {ride?.status === 'in_progress' ? 'Destino' : 'Punto de recogida'}
+                            {ride?.status === 'in_progress' ? 'Destino Final' : 'Punto de recogida'}
                         </Text>
-                        <Text style={styles.navAddress}>
-                            {destination?.name || 'Cargando dirección...'}
+                        <Text style={styles.navAddress} numberOfLines={2}>
+                            {ride?.status === 'in_progress' && ride?.dropoffs && ride.dropoffs.length > 1
+                                ? `${ride.dropoffs.length - 1} Paradas + Destino: ${destination?.name || 'Cargando...'}`
+                                : (destination?.name || 'Cargando dirección...')}
                         </Text>
                     </View>
                 </View>

@@ -221,12 +221,21 @@ export default function DriverDashboard({ navigation }) {
                         </Text>
                     </View>
                     <View style={styles.routeLine} />
-                    <View style={styles.routeRow}>
-                        <View style={[styles.routeDot, { backgroundColor: COLORS.error }]} />
-                        <Text style={styles.routeText} numberOfLines={1}>
-                            {item.dropoff?.name || 'Destino'}
-                        </Text>
-                    </View>
+                    {item.dropoffs && item.dropoffs.length > 1 ? (
+                        <View style={styles.routeRow}>
+                            <View style={[styles.routeDot, { backgroundColor: COLORS.warning }]} />
+                            <Text style={styles.routeText} numberOfLines={1}>
+                                {item.dropoffs.length - 1} Parada{item.dropoffs.length > 2 ? 's' : ''} + Destino ({item.dropoffs[item.dropoffs.length - 1].name})
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={styles.routeRow}>
+                            <View style={[styles.routeDot, { backgroundColor: COLORS.error }]} />
+                            <Text style={styles.routeText} numberOfLines={1}>
+                                {item.dropoffs?.[0]?.name || item.dropoff?.name || 'Destino'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.requestFooter}>

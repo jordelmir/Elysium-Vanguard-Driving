@@ -31,8 +31,9 @@ export default function RiderDashboard({ navigation }) {
     const [drivers, setDrivers] = useState([]);
     const [showPanel, setShowPanel] = useState(false);
     const [destination, setDestination] = useState(null);
-    const [routeInfo, setRouteInfo] = useState({ distance: 0, duration: 0 });
     const [destinationName, setDestinationName] = useState('');
+    const [stops, setStops] = useState([]); // Array of { latitude, longitude, name }
+    const [activeSearchIndex, setActiveSearchIndex] = useState(-1); // -1 = destination, 0,1,2... = stop
     const [pickupName, setPickupName] = useState('');
     const [selectedPrice, setSelectedPrice] = useState(0);
     const [customPrice, setCustomPrice] = useState('');
@@ -132,10 +133,30 @@ export default function RiderDashboard({ navigation }) {
         const latitude = lat;
         const longitude = lng;
 
-        setDestination({ latitude, longitude });
+        if (activeSearchIndex === -1) {
+            setDestination({ latitude, longitude });
+        } else {
+            const newStops = [...stops];
+            newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], latitude, longitude };
+            setStops(newStops);
+        }
 
         if (myLocation) {
-            const route = await getRoute(myLocation.latitude, myLocation.longitude, latitude, longitude);
+            const validStops = stops.filter(s => s.latitude && s.longitude);
+            const points = [
+                { latitude: myLocation.latitude, longitude: myLocation.longitude },
+                ...validStops,
+            ];
+            if (activeSearchIndex === -1) {
+                points.push({ latitude, longitude });
+            } else {
+                points[activeSearchIndex + 1] = { latitude, longitude }; // +1 because pickup is index 0
+                if (destination) points.push({ latitude: destination.latitude, longitude: destination.longitude });
+            }
+
+            // Remove any potential undefined slots if indexes are weird
+            const cleanPoints = points.filter(p => p && p.latitude && p.longitude);
+            const route = await getRoute(cleanPoints);
             if (route) {
                 setRouteInfo({
                     distance: parseFloat(route.distance.toFixed(2)),
@@ -173,7 +194,13 @@ export default function RiderDashboard({ navigation }) {
 
             if (!isSilent) {
                 const details = await getPlaceDetails(latitude, longitude);
-                setDestinationName(details.address);
+                if (activeSearchIndex === -1) {
+                    setDestinationName(details.address);
+                } else {
+                    const newStops = [...stops];
+                    newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], name: details.address };
+                    setStops(newStops);
+                }
             }
         };
 
@@ -197,8 +224,15 @@ export default function RiderDashboard({ navigation }) {
         }, [searchQuery]);
 
         const selectSearchResult = (item) => {
-            setDestination({ latitude: item.latitude, longitude: item.longitude });
-            setDestinationName(item.name);
+            if (activeSearchIndex === -1) {
+                setDestination({ latitude: item.latitude, longitude: item.longitude });
+                setDestinationName(item.name);
+            } else {
+                const newStops = [...stops];
+                newStops[activeSearchIndex] = { latitude: item.latitude, longitude: item.longitude, name: item.name };
+                setStops(newStops);
+            }
+
             setSearchQuery('');
             setSearchResults([]);
 
@@ -210,7 +244,20 @@ export default function RiderDashboard({ navigation }) {
 
             if (myLocation) {
                 const fetchRoute = async () => {
-                    const route = await getRoute(myLocation.latitude, myLocation.longitude, item.latitude, item.longitude);
+                    const validStops = stops.filter(s => s.latitude && s.longitude);
+                    const points = [
+                        { latitude: myLocation.latitude, longitude: myLocation.longitude },
+                        ...validStops,
+                    ];
+                    if (activeSearchIndex === -1) {
+                        points.push({ latitude: item.latitude, longitude: item.longitude });
+                    } else {
+                        points[activeSearchIndex + 1] = { latitude: item.latitude, longitude: item.longitude };
+                        if (destination) points.push({ latitude: destination.latitude, longitude: destination.longitude });
+                    }
+
+                    const cleanPoints = points.filter(p => p && p.latitude && p.longitude);
+                    const route = await getRoute(cleanPoints);
                     if (route) {
                         setRouteInfo({
                             distance: parseFloat(route.distance.toFixed(2)),
@@ -283,19 +330,21 @@ export default function RiderDashboard({ navigation }) {
                 const rideData = {
                     riderId: user.uid,
                     riderName: userData?.name || 'Pasajero',
-                    riderPhone: userData?.phone || '',
-                    driverId: null,
+                    riderRating: userData?.rating || 5.0,
                     status: 'pending',
                     pickup: {
                         latitude: myLocation.latitude,
                         longitude: myLocation.longitude,
                         name: pickupName,
                     },
-                    dropoff: {
-                        latitude: destination.latitude,
-                        longitude: destination.longitude,
-                        name: destinationName,
-                    },
+                    dropoffs: [
+                        ...stops.filter(s => s.latitude && s.longitude).map(s => ({ latitude: s.latitude, longitude: s.longitude, name: s.name })),
+                        {
+                            latitude: destination.latitude,
+                            longitude: destination.longitude,
+                            name: destinationName,
+                        }
+                    ],
                     distance: routeInfo.distance,
                     duration: routeInfo.duration,
                     proposedPrice: Number(customPrice),
@@ -368,10 +417,16 @@ export default function RiderDashboard({ navigation }) {
                                         icon: '📍',
                                         size: [32, 32],
                                     },
+                                    ...stops.filter(s => s.latitude && s.longitude).map((s, index) => ({
+                                        id: `stop-${index}`,
+                                        position: { lat: s.latitude, lng: s.longitude },
+                                        icon: String.fromCharCode(66 + index), // B, C, D...
+                                        size: [32, 32],
+                                    })),
                                     ...(destination ? [{
                                         id: 'destination',
                                         position: { lat: destination.latitude, lng: destination.longitude },
-                                        icon: '🏁',
+                                        icon: String.fromCharCode(66 + stops.filter(s => s.latitude && s.longitude).length), // Always the last letter
                                         size: [32, 32],
                                     }] : []),
                                 ]}
@@ -435,7 +490,7 @@ export default function RiderDashboard({ navigation }) {
                                 <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
                                 <TextInput
                                     style={styles.searchInput}
-                                    placeholder="📍 ¿A dónde vamos en CR?"
+                                    placeholder={activeSearchIndex === -1 ? "📍 ¿A dónde vamos en CR?" : `📍 Agregar Parada ${activeSearchIndex + 1}`}
                                     placeholderTextColor={COLORS.textMuted}
                                     value={searchQuery}
                                     onChangeText={setSearchQuery}
@@ -572,18 +627,40 @@ export default function RiderDashboard({ navigation }) {
                                     </View>
                                 </View>
 
+                                {stops.map((stop, index) => (
+                                    <View key={index} style={styles.locationRow}>
+                                        <View style={[styles.locationDot, { backgroundColor: COLORS.warning }]} />
+                                        <View style={styles.locationInfo}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Text style={styles.locationLabel}>Parada {index + 1}</Text>
+                                                <TouchableOpacity onPress={() => {
+                                                    setActiveSearchIndex(index);
+                                                    setSearchQuery('');
+                                                }}>
+                                                    <Text style={styles.mapPickText}>Cambiar</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                            <Text style={styles.locationName} numberOfLines={2}>
+                                                {stop.name || 'Buscando...'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))}
+
                                 <View style={styles.locationRow}>
                                     <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
                                     <View style={styles.locationInfo}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Text style={styles.locationLabel}>Destino</Text>
+                                            <Text style={styles.locationLabel}>Destino Final</Text>
                                             <TouchableOpacity onPress={() => {
+                                                setActiveSearchIndex(-1);
                                                 if (!destination && myLocation) {
                                                     setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
                                                 }
                                                 setIsMapPickerMode(true);
+                                                if (showPanel) togglePanel();
                                             }}>
-                                                <Text style={styles.mapPickText}>Seleccionar en mapa</Text>
+                                                <Text style={styles.mapPickText}>Mapa</Text>
                                             </TouchableOpacity>
                                         </View>
                                         <Text style={styles.locationName} numberOfLines={2}>
@@ -591,6 +668,24 @@ export default function RiderDashboard({ navigation }) {
                                         </Text>
                                     </View>
                                 </View>
+
+                                {stops.length < 3 && destination && (
+                                    <View style={styles.addStopRow}>
+                                        <View style={styles.addStopLine} />
+                                        <TouchableOpacity
+                                            style={styles.addStopBtn}
+                                            onPress={() => {
+                                                const newIndex = stops.length;
+                                                setStops([...stops, { latitude: null, longitude: null, name: '' }]);
+                                                setActiveSearchIndex(newIndex);
+                                                if (showPanel) togglePanel(); // Collapse panel to bring focus to the search bar
+                                            }}
+                                        >
+                                            <Text style={styles.addStopEmoji}>➕</Text>
+                                            <Text style={styles.addStopText}>Añadir Parada</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
 
                                 <ScrollView
                                     horizontal={true}
@@ -952,6 +1047,37 @@ export default function RiderDashboard({ navigation }) {
             fontSize: 10,
             color: COLORS.textMuted,
             textTransform: 'uppercase',
+        },
+        addStopRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 10,
+        },
+        addStopLine: {
+            width: 2,
+            height: 20,
+            backgroundColor: COLORS.border,
+            marginLeft: 7,
+            marginRight: 15,
+        },
+        addStopBtn: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 8,
+            paddingHorizontal: 12,
+            backgroundColor: COLORS.bgCard,
+            borderWidth: 1,
+            borderColor: COLORS.accent,
+            borderRadius: RADIUS.md,
+        },
+        addStopEmoji: {
+            fontSize: 14,
+            marginRight: 6,
+        },
+        addStopText: {
+            color: COLORS.accent,
+            fontWeight: '600',
+            fontSize: 14,
         },
         locationName: {
             fontSize: 15,

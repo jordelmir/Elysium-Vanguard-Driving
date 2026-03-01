@@ -178,12 +178,20 @@ export async function reverseGeocode(latitude, longitude) {
     }
 }
 /**
- * Get route between two points using OSRM
+ * Get route passing through multiple points using OSRM
+ * @param {Array<{latitude: number, longitude: number}>} points - Array of coordinates to pass through
  * @returns {Promise<Object>} { coordinates, distance, duration }
  */
-export async function getRoute(lat1, lon1, lat2, lon2) {
+export async function getRoute(points) {
     try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+        if (!points || points.length < 2) return null;
+
+        // Format for OSRM: lon,lat;lon,lat;...
+        const coordinatesString = points
+            .map(p => `${p.longitude},${p.latitude}`)
+            .join(';');
+
+        const url = `https://router.project-osrm.org/route/v1/driving/${coordinatesString}?overview=full&geometries=geojson`;
         const response = await fetch(url);
         const data = await response.json();
 
