@@ -577,7 +577,13 @@ export default function RiderDashboard({ navigation }) {
                                     </View>
                                 </View>
                             </View>
-                            <TouchableOpacity style={styles.menuItem}>
+                            <TouchableOpacity
+                                style={styles.menuItem}
+                                onPress={() => {
+                                    setShowMenu(false);
+                                    navigation.navigate('RiderHistory');
+                                }}
+                            >
                                 <Text style={styles.menuItemIcon}>📋</Text>
                                 <Text style={styles.menuItemText}>Mis viajes</Text>
                             </TouchableOpacity>
