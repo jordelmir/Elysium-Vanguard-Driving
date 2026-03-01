@@ -2,14 +2,14 @@
 // Costa Rica Colones (₡)
 
 const BASE_FARE = 0;      // ₡500 tarifa base
-const PER_KM = 300;         // ₡350 por kilómetro
-const PER_MINUTE = 60;      // ₡50 por minuto estimado
+const PER_KM = 300;         // ₡300 por kilómetro
+const PER_MINUTE = 60;      // ₡60 por minuto estimado
 const MIN_FARE = 1000;      // ₡1,000 tarifa mínima
 const COMMISSION_RATE = 0.01; // 1% comisión de la plataforma
 
-export function calculateSuggestedPrice(distanceKm) {
-    // Estimate time: average 30km/h in city → minutes = (distance / 30) * 60
-    const estimatedMinutes = Math.max(2, Math.round((distanceKm / 30) * 60));
+export function calculateSuggestedPrice(distanceKm, durationMinutes = null) {
+    // If real duration is provided, use it. Otherwise estimate: average 30km/h in city → minutes = (distance / 30) * 60
+    const estimatedMinutes = durationMinutes !== null ? Math.max(2, Math.round(durationMinutes)) : Math.max(2, Math.round((distanceKm / 30) * 60));
 
     // Determine traffic multiplier based on time of day
     // Peak hours: 7-9 AM, 5-7 PM
@@ -68,15 +68,15 @@ export function formatPrice(amount) {
 
 /**
  * Generate price suggestions around a base price
- * @returns {array} array of 3 price options [lower, suggested, higher]
+ * @returns {array} array of 3 price options [base, higher1, higher2]
  */
 export function generatePriceSuggestions(suggestedPrice) {
-    const lower = Math.round((suggestedPrice * 0.85) / 100) * 100;
-    const higher = Math.round((suggestedPrice * 1.15) / 100) * 100;
+    const higher1 = Math.round((suggestedPrice * 1.10) / 100) * 100;
+    const higher2 = Math.round((suggestedPrice * 1.25) / 100) * 100;
 
     return [
-        { label: 'Económico', price: Math.max(lower, MIN_FARE) },
-        { label: 'Recomendado', price: suggestedPrice },
-        { label: 'Premium', price: higher },
+        { label: 'Automático', price: suggestedPrice },
+        { label: 'Directo', price: higher1 },
+        { label: 'Prioridad', price: higher2 },
     ];
 }
