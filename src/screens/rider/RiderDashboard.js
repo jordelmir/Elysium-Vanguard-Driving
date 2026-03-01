@@ -131,22 +131,30 @@ export default function RiderDashboard({ navigation }) {
 
         setDestination({ latitude, longitude });
 
-        let dist = 0;
         if (myLocation) {
-            dist = calculateDistance(
-                myLocation.latitude, myLocation.longitude,
-                latitude, longitude
-            );
-            const pricing = calculateSuggestedPrice(dist || 0);
-            setRouteInfo({
-                distance: pricing.distanceKm || 0,
-                duration: pricing.estimatedMinutes || 2
-            });
+            const route = await getRoute(myLocation.latitude, myLocation.longitude, latitude, longitude);
+            if (route) {
+                setRouteInfo({
+                    distance: parseFloat(route.distance.toFixed(2)),
+                    duration: Math.ceil(route.duration)
+                });
+                setRouteCoordinates(route.coordinates);
 
-            const suggestions = generatePriceSuggestions(pricing.suggestedPrice || 1000);
-            setPriceSuggestions(suggestions);
-            setSelectedPrice(pricing.suggestedPrice || 1000);
-            setCustomPrice((pricing.suggestedPrice || 1000).toString());
+                const pricing = calculateSuggestedPrice(route.distance);
+                const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
+                setPriceSuggestions(suggestions);
+                setSelectedPrice(pricing.suggestedPrice);
+                setCustomPrice(pricing.suggestedPrice.toString());
+            } else {
+                // Fallback to straight line if OSRM fails
+                const dist = calculateDistance(myLocation.latitude, myLocation.longitude, latitude, longitude);
+                const pricing = calculateSuggestedPrice(dist || 0);
+                setRouteInfo({
+                    distance: pricing.distanceKm || 0,
+                    duration: pricing.estimatedMinutes || 2
+                });
+                setRouteCoordinates([]);
+            }
         }
 
         if (!isSilent) {
@@ -332,14 +340,18 @@ export default function RiderDashboard({ navigation }) {
                                     icon: '🏁',
                                     size: [32, 32],
                                 }] : []),
-                                ...drivers.map(d => ({
-                                    id: `drv-${d.id}`,
-                                    position: { lat: d.location.latitude, lng: d.location.longitude },
-                                    icon: '🚗',
-                                    size: [32, 32],
-                                }))
-                            ]}
-                        />
+                                size: [32, 32],
+                            }))
+                        ]}
+                        mapShapes={routeCoordinates.length > 0 ? [{
+                            shapeType: 'Polyline',
+                            color: COLORS.accent,
+                            id: 'route-line',
+                            positions: routeCoordinates,
+                            weight: 5,
+                            opacity: 0.8
+                        }] : []}
+                    />
                     </View>
                 )}
 
