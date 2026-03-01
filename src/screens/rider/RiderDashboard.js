@@ -349,7 +349,7 @@ export default function RiderDashboard({ navigation }) {
                                 lat: myLocation.latitude,
                                 lng: myLocation.longitude
                             }}
-                            zoom={14}
+                            zoom={mapZoom}
                             mapMarkers={[
                                 {
                                     id: 'user-loc',
@@ -375,6 +375,48 @@ export default function RiderDashboard({ navigation }) {
                             opacity: 0.8
                         }] : []}
                     />
+
+                        {/* Top-Tier Map Overlay: Zoom & Recenter Controls */}
+                        <View style={styles.mapControls}>
+                            <TouchableOpacity
+                                style={styles.mapControlButton}
+                                onPress={() => {
+                                    const nextZoom = Math.min(mapZoom + 1, 19);
+                                    setMapZoom(nextZoom);
+                                    mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                }}
+                            >
+                                <Text style={styles.mapControlText}>+</Text>
+                            </TouchableOpacity>
+                            <View style={styles.controlDivider} />
+                            <TouchableOpacity
+                                style={styles.mapControlButton}
+                                onPress={() => {
+                                    const nextZoom = Math.max(mapZoom - 1, 5);
+                                    setMapZoom(nextZoom);
+                                    mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                }}
+                            >
+                                <Text style={styles.mapControlText}>−</Text>
+                            </TouchableOpacity>
+                            <View style={styles.controlDivider} />
+                            <TouchableOpacity
+                                style={styles.mapControlButton}
+                                onPress={async () => {
+                                    try {
+                                        const loc = await getCurrentLocation();
+                                        setMyLocation(loc);
+                                        if (mapRef.current) {
+                                            mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16);`);
+                                        }
+                                    } catch (error) {
+                                        Alert.alert('Error', 'No se pudo obtener la ubicación');
+                                    }
+                                }}
+                            >
+                                <Text style={{ fontSize: 20 }}>🎯</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 )}
 
@@ -1160,15 +1202,43 @@ const styles = StyleSheet.create({
     metricItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     metricEmoji: { fontSize: 14 },
     metricDivider: { width: 1, height: 20, backgroundColor: COLORS.border, marginHorizontal: 15 },
-    confirmMapPicker: {
+    confirmMapPickerText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+
+    // Professional Map Controls
+    mapControls: {
         position: 'absolute',
-        bottom: 50,
-        left: 20,
-        right: 20,
-        backgroundColor: COLORS.accent,
-        padding: 15,
+        right: 15,
+        top: '30%',
+        backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.lg,
+        padding: 5,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 5,
+            },
+            android: { elevation: 10 },
+        }),
+    },
+    mapControlButton: {
+        width: 44,
+        height: 44,
+        justifyContent: 'center',
         alignItems: 'center',
     },
-    confirmMapPickerText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    mapControlText: {
+        fontSize: 24,
+        color: COLORS.textPrimary,
+        fontWeight: '300',
+    },
+    controlDivider: {
+        height: 1,
+        width: '70%',
+        alignSelf: 'center',
+        backgroundColor: COLORS.border,
+    },
 });
