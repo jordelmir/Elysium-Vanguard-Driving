@@ -1,9 +1,9 @@
 // Pricing engine for Elysium Vanguard Driving
 // Costa Rica Colones (₡)
 
-const BASE_FARE = 500;      // ₡500 tarifa base
-const PER_KM = 350;         // ₡350 por kilómetro
-const PER_MINUTE = 50;      // ₡50 por minuto estimado
+const BASE_FARE = 0;      // ₡500 tarifa base
+const PER_KM = 300;         // ₡350 por kilómetro
+const PER_MINUTE = 60;      // ₡50 por minuto estimado
 const MIN_FARE = 1000;      // ₡1,000 tarifa mínima
 const COMMISSION_RATE = 0.01; // 1% comisión de la plataforma
 

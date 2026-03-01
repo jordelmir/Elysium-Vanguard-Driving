@@ -9,6 +9,11 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext({});
+export const calculateRatingPercentage = (sum, count) => {
+    if (!count || count === 0) return 100; // New users start at 100%
+    const avg = sum / count;
+    return Math.round((avg / 10) * 100);
+};
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -43,7 +48,8 @@ export function AuthProvider({ children }) {
             email,
             phone,
             role, // 'rider' or 'driver'
-            rating: 5.0,
+            ratingSum: 0,
+            ratingCount: 0,
             totalRides: 0,
             createdAt: new Date().toISOString(),
         };

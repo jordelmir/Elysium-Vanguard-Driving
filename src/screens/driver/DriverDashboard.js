@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { CARTO_DARK_TILES } from '../rider/RiderDashboard';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
 import { getCurrentLocation, watchLocation, calculateDistance } from '../../lib/geo';
 import { formatPrice, calculateCommission } from '../../lib/pricing';
 import { db } from '../../lib/firebase';
@@ -87,11 +87,25 @@ export default function DriverDashboard({ navigation }) {
             where('status', '==', 'pending')
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
             const requests = [];
-            snapshot.forEach((docSnap) => {
+
+            // We need to fetch rider details for each request to show ratings
+            const promises = snapshot.docs.map(async (docSnap) => {
                 const data = docSnap.data();
-                // Filter by distance (only show rides within ~10km)
+
+                // Fetch rider info
+                let riderRating = 100;
+                let riderTrips = 0;
+                try {
+                    const riderDoc = await getDoc(doc(db, 'users', data.riderId));
+                    if (riderDoc.exists()) {
+                        const rData = riderDoc.data();
+                        riderRating = calculateRatingPercentage(rData.ratingSum, rData.ratingCount);
+                        riderTrips = rData.totalRides || 0;
+                    }
+                } catch (e) { }
+
                 if (myLocation && data.pickup) {
                     const dist = calculateDistance(
                         myLocation.latitude, myLocation.longitude,
@@ -102,13 +116,22 @@ export default function DriverDashboard({ navigation }) {
                             id: docSnap.id,
                             ...data,
                             distanceToPickup: dist,
+                            riderRating,
+                            riderTrips,
                         });
                     }
                 } else {
-                    requests.push({ id: docSnap.id, ...data, distanceToPickup: null });
+                    requests.push({
+                        id: docSnap.id,
+                        ...data,
+                        distanceToPickup: null,
+                        riderRating,
+                        riderTrips
+                    });
                 }
             });
 
+            await Promise.all(promises);
             // Sort by distance
             requests.sort((a, b) => (a.distanceToPickup || 999) - (b.distanceToPickup || 999));
             setRideRequests(requests);
@@ -164,6 +187,17 @@ export default function DriverDashboard({ navigation }) {
                         <Text style={styles.riderAvatar}>👤</Text>
                         <View>
                             <Text style={styles.riderName}>{item.riderName}</Text>
+                            <View style={styles.riderMetrics}>
+                                <Text style={[
+                                    styles.riderRatingText,
+                                    { color: item.riderRating >= 70 ? COLORS.success : COLORS.error }
+                                ]}>
+                                    ⭐ {item.riderRating}%
+                                </Text>
+                                <Text style={styles.riderTripsBadge}>
+                                    {item.riderTrips} viajes
+                                </Text>
+                            </View>
                             {item.distanceToPickup && (
                                 <Text style={styles.distanceText}>
                                     📍 {item.distanceToPickup.toFixed(1)} km de ti
@@ -345,22 +379,49 @@ export default function DriverDashboard({ navigation }) {
                 >
                     <View style={styles.menuContent}>
                         <View style={styles.menuHeader}>
-                            <Text style={{ fontSize: 48 }}>🚗</Text>
-                            <Text style={styles.menuName}>{userData?.name || 'Chofer'}</Text>
-                            <Text style={styles.menuRole}>Chofer · ⭐ {userData?.rating || 5.0}</Text>
+                            <View style={styles.userAvatarLarge}>
+                                <Text style={{ fontSize: 40 }}>👤</Text>
+                            </View>
+                            <Text style={styles.menuUserName}>{userData?.name || 'Chofer'}</Text>
+
+                            <View style={styles.ratingBadgeContainer}>
+                                <Text style={[
+                                    styles.ratingPercent,
+                                    { color: calculateRatingPercentage(userData?.ratingSum, userData?.ratingCount) >= 70 ? COLORS.success : COLORS.error }
+                                ]}>
+                                    {calculateRatingPercentage(userData?.ratingSum, userData?.ratingCount)}% Calificación
+                                </Text>
+                                {calculateRatingPercentage(userData?.ratingSum, userData?.ratingCount) >= 70 && (
+                                    <View style={styles.recommendedBadge}>
+                                        <Text style={styles.recommendedText}>⭐ RECOMENDADO</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <Text style={styles.userTrips}>{userData?.totalRides || 0} viajes completados</Text>
                         </View>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemText}>📋 Mis viajes</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemText}>💰 Ganancias</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem}>
-                            <Text style={styles.menuItemText}>🚙 Mi vehículo</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.menuItem} onPress={logout}>
-                            <Text style={[styles.menuItemText, { color: COLORS.error }]}>🚪 Cerrar sesión</Text>
-                        </TouchableOpacity>
+
+                        <View style={styles.menuItems}>
+                            <TouchableOpacity style={styles.menuItem}>
+                                <Text style={styles.menuItemIcon}>📋</Text>
+                                <Text style={styles.menuItemText}>Mis Viajes</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.menuItem}>
+                                <Text style={styles.menuItemIcon}>💰</Text>
+                                <Text style={styles.menuItemText}>Ganancias</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.menuItem}>
+                                <Text style={styles.menuItemIcon}>🚙</Text>
+                                <Text style={styles.menuItemText}>Vehículo</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.menuItem, { marginTop: 'auto' }]}
+                                onPress={logout}
+                            >
+                                <Text style={[styles.menuItemIcon, { color: COLORS.error }]}>🚪</Text>
+                                <Text style={[styles.menuItemText, { color: COLORS.error }]}>Cerrar Sesión</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </TouchableOpacity>
             )}
@@ -650,44 +711,106 @@ const styles = StyleSheet.create({
     connectBtnTextOnline: {
         color: '#ffffff',
     },
+    riderMetrics: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: SPACING.xs,
+        marginTop: 2,
+    },
+    riderRatingText: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    riderTripsBadge: {
+        fontSize: 10,
+        color: COLORS.textMuted,
+        backgroundColor: COLORS.bgPrimary,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: COLORS.border,
+    },
     // Menu
     menuOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'flex-start',
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
     },
     menuContent: {
         width: width * 0.8,
         height: '100%',
         backgroundColor: COLORS.bgSecondary,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingHorizontal: SPACING.lg,
+        borderRightWidth: 1,
+        borderRightColor: COLORS.border,
     },
     menuHeader: {
+        padding: SPACING.xl,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        backgroundColor: COLORS.bgCard,
         alignItems: 'center',
-        paddingBottom: SPACING.lg,
-        marginBottom: SPACING.lg,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
-    menuName: {
-        fontSize: FONTS.sizes.xl,
-        fontWeight: '700',
-        color: COLORS.textPrimary,
-        marginTop: SPACING.sm,
+    userAvatarLarge: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: COLORS.bgPrimary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+        borderWidth: 2,
+        borderColor: COLORS.accent,
     },
-    menuRole: {
-        fontSize: FONTS.sizes.sm,
-        color: COLORS.accent,
-        marginTop: 2,
+    menuUserName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    ratingBadgeContainer: {
+        alignItems: 'center',
+        marginBottom: SPACING.sm,
+    },
+    ratingPercent: {
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    recommendedBadge: {
+        backgroundColor: COLORS.success + '20',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 4,
+        marginTop: 4,
+        borderWidth: 1,
+        borderColor: COLORS.success,
+    },
+    recommendedText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: COLORS.success,
+    },
+    userTrips: {
+        fontSize: 14,
+        color: COLORS.textMuted,
+    },
+    menuItems: {
+        padding: SPACING.lg,
+        flex: 1,
     },
     menuItem: {
-        paddingVertical: SPACING.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: SPACING.lg,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.borderLight,
     },
+    menuItemIcon: {
+        fontSize: 22,
+        marginRight: SPACING.md,
+    },
     menuItemText: {
-        fontSize: FONTS.sizes.md,
+        fontSize: 16,
         color: COLORS.textPrimary,
         fontWeight: '500',
     },

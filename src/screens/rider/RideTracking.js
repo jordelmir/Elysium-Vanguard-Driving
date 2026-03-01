@@ -5,8 +5,9 @@ import {
 import { LeafletView } from 'react-native-leaflet-view';
 import { CARTO_DARK_TILES } from './RiderDashboard';
 import { db } from '../../lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
+import RatingModal from '../../components/RatingModal';
 
 // Dark map style removed as CARTO_DARK_TILES will be used in WebViewLeaflet
 
@@ -17,6 +18,7 @@ export default function RideTracking({ route, navigation }) {
     const [ride, setRide] = useState(null);
     const [driverLocation, setDriverLocation] = useState(null);
     const [driverInfo, setDriverInfo] = useState(null);
+    const [showRatingModal, setShowRatingModal] = useState(false);
 
     // Listen for ride updates
     useEffect(() => {
@@ -24,14 +26,34 @@ export default function RideTracking({ route, navigation }) {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setRide(data);
-                if (data.status === 'completed') {
-                    Alert.alert('🎉 ¡Viaje completado!', `Total: ₡${data.acceptedPrice || data.proposedPrice}`);
-                    navigation.goBack();
+                if (data.status === 'completed' && !showRatingModal) {
+                    setShowRatingModal(true);
                 }
             }
         });
         return unsubscribe;
-    }, [rideId]);
+    }, [rideId, showRatingModal]);
+
+    const handleFinishRating = async (rating) => {
+        try {
+            // Update driver rating
+            if (driverId) {
+                await updateDoc(doc(db, 'users', driverId), {
+                    ratingSum: increment(rating),
+                    ratingCount: increment(1),
+                    totalRides: increment(1),
+                });
+            }
+
+            setShowRatingModal(false);
+            Alert.alert('🎉 ¡Viaje completado!', `Total: ₡${ride?.acceptedPrice || ride?.proposedPrice}`);
+            navigation.goBack();
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'No se pudo guardar la calificación');
+            navigation.goBack();
+        }
+    };
 
     // Listen for driver location
     useEffect(() => {
@@ -152,6 +174,12 @@ export default function RideTracking({ route, navigation }) {
                     </Text>
                 </View>
             </View>
+
+            <RatingModal
+                visible={showRatingModal}
+                type="driver"
+                onFinish={handleFinishRating}
+            />
         </View>
     );
 }

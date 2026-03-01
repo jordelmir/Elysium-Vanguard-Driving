@@ -4,7 +4,7 @@ import {
     StatusBar, TextInput, Modal, Alert, Animated, Platform,
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
 import { getCurrentLocation, watchLocation, calculateDistance, reverseGeocode } from '../../lib/geo';
 import { calculateSuggestedPrice, generatePriceSuggestions, formatPrice } from '../../lib/pricing';
 import { db } from '../../lib/firebase';
@@ -394,20 +394,23 @@ export default function RiderDashboard({ navigation }) {
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
-                            onPress={sendRideRequest}
-                            disabled={rideStatus === 'searching'}
                             activeOpacity={0.8}
                         >
                             <Text style={styles.sendBtnText}>
-                                {rideStatus === 'searching' ? 'Buscando...' : 'Solicitar Viaje'}
+                                {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
                             </Text>
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
             </View>
 
-            {/* Side menu modal */}
-            <Modal visible={showMenu} transparent animationType="slide">
+            {/* Side Menu */}
+            <Modal
+                visible={showMenu}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowMenu(false)}
+            >
                 <TouchableOpacity
                     style={styles.menuOverlay}
                     activeOpacity={1}
@@ -743,58 +746,78 @@ const styles = StyleSheet.create({
         width: width * 0.8,
         height: '100%',
         backgroundColor: COLORS.bgSecondary,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingHorizontal: SPACING.lg,
+        borderRightWidth: 1,
+        borderRightColor: COLORS.border,
     },
     menuHeader: {
+        padding: SPACING.xl,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
+        backgroundColor: COLORS.bgCard,
         alignItems: 'center',
-        marginBottom: SPACING.xl,
-        paddingBottom: SPACING.lg,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
-    menuAvatar: {
-        fontSize: 48,
+    userAvatarLarge: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: COLORS.bgPrimary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: SPACING.md,
+        borderWidth: 2,
+        borderColor: COLORS.accent,
+    },
+    menuUserName: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: COLORS.textPrimary,
+        marginBottom: SPACING.xs,
+    },
+    ratingBadgeContainer: {
+        alignItems: 'center',
         marginBottom: SPACING.sm,
     },
-    menuName: {
-        fontSize: FONTS.sizes.xl,
+    ratingPercent: {
+        fontSize: 16,
         fontWeight: '700',
-        color: COLORS.textPrimary,
     },
-    menuRole: {
-        fontSize: FONTS.sizes.sm,
-        color: COLORS.accent,
-        fontWeight: '600',
+    recommendedBadge: {
+        backgroundColor: COLORS.success + '20',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 4,
+        marginTop: 4,
+        borderWidth: 1,
+        borderColor: COLORS.success,
+    },
+    recommendedText: {
+        fontSize: 10,
+        fontWeight: '900',
+        color: COLORS.success,
+    },
+    userTrips: {
+        fontSize: 14,
+        color: COLORS.textMuted,
+    },
+    menuItems: {
+        padding: SPACING.lg,
     },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: SPACING.md,
-        gap: SPACING.md,
+        paddingVertical: SPACING.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.borderLight,
     },
     menuItemIcon: {
         fontSize: 22,
+        marginRight: SPACING.md,
     },
     menuItemText: {
-        fontSize: FONTS.sizes.md,
+        fontSize: 16,
         color: COLORS.textPrimary,
         fontWeight: '500',
-    },
-    logoutBtn: {
-        marginTop: 'auto',
-        marginBottom: SPACING.xxl,
-        backgroundColor: COLORS.errorBg,
-        borderRadius: RADIUS.md,
-        padding: SPACING.md,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(248, 81, 73, 0.3)',
-    },
-    logoutText: {
-        color: COLORS.error,
-        fontWeight: '600',
-        fontSize: FONTS.sizes.md,
     },
     recenterButton: {
         position: 'absolute',

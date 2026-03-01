@@ -8,8 +8,9 @@ import { useAuth } from '../../context/AuthContext';
 import { watchLocation } from '../../lib/geo';
 import { formatPrice } from '../../lib/pricing';
 import { db } from '../../lib/firebase';
-import { doc, onSnapshot, updateDoc, GeoPoint, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, GeoPoint, serverTimestamp, increment } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
+import RatingModal from '../../components/RatingModal';
 
 // Dark map style removed as CARTO_DARK_TILES will be used in WebViewLeaflet
 
@@ -20,6 +21,7 @@ export default function ActiveRide({ route, navigation }) {
 
     const [ride, setRide] = useState(null);
     const [myLocation, setMyLocation] = useState(null);
+    const [showRatingModal, setShowRatingModal] = useState(false);
 
     // Listen for ride data
     useEffect(() => {
@@ -64,18 +66,40 @@ export default function ActiveRide({ route, navigation }) {
             await updateDoc(doc(db, 'rides', rideId), updates);
 
             if (newStatus === 'completed') {
-                // Reset driver state
+                // Step 1: Update ride and driver basic state
                 await updateDoc(doc(db, 'drivers', user.uid), {
                     currentRideId: null,
                 });
-                Alert.alert(
-                    '✅ ¡Viaje completado!',
-                    `Cobrar: ${formatPrice(ride?.acceptedPrice || ride?.proposedPrice || 0)}\nComisión Elysium Vanguard Driving: ${formatPrice(Math.round((ride?.acceptedPrice || ride?.proposedPrice || 0) * 0.01))}`,
-                    [{ text: 'OK', onPress: () => navigation.goBack() }]
-                );
+
+                // Show rating modal first, then navigate away
+                setShowRatingModal(true);
             }
         } catch (error) {
             Alert.alert('Error', 'No se pudo actualizar el viaje');
+        }
+    };
+
+    const handleFinishRating = async (rating) => {
+        try {
+            // Update rider rating
+            if (ride?.riderId) {
+                await updateDoc(doc(db, 'users', ride.riderId), {
+                    ratingSum: increment(rating),
+                    ratingCount: increment(1),
+                    totalRides: increment(1),
+                });
+            }
+
+            setShowRatingModal(false);
+            Alert.alert(
+                '✅ ¡Viaje completado!',
+                `Cobrar: ${formatPrice(ride?.acceptedPrice || ride?.proposedPrice || 0)}\nComisión Elysium Vanguard Driving: ${formatPrice(Math.round((ride?.acceptedPrice || ride?.proposedPrice || 0) * 0.01))}`,
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'No se pudo guardar la calificación');
+            navigation.goBack();
         }
     };
 
@@ -238,6 +262,12 @@ export default function ActiveRide({ route, navigation }) {
                     </TouchableOpacity>
                 )}
             </View>
+
+            <RatingModal
+                visible={showRatingModal}
+                type="rider"
+                onFinish={handleFinishRating}
+            />
         </View>
     );
 }
