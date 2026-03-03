@@ -4,12 +4,12 @@ import {
     View,
     Dimensions,
     ScrollView,
-    Platform
+    Platform,
+    Keyboard,
+    TouchableWithoutFeedback
 } from 'react-native';
 import Animated, {
     useAnimatedStyle,
-    interpolate,
-    Extrapolate
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 
@@ -29,11 +29,14 @@ const DynamicBottomSheet = ({ translateY, children }) => {
     return (
         <Animated.View style={[styles.container, animatedStyle]}>
             <BlurView intensity={95} tint="dark" style={styles.glass}>
-                <View style={styles.dragHandle} />
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.dragHandle} />
+                </TouchableWithoutFeedback>
                 <ScrollView
                     style={styles.scroll}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     {children}
                 </ScrollView>
@@ -47,7 +50,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        height: height * 0.7, // Altura máxima estricta (70% de la pantalla)
+        height: height * 0.5, // Reducido al 50% según la nueva instrucción técnica
         zIndex: 30, // Capa 3
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,

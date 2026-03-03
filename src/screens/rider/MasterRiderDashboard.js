@@ -6,7 +6,12 @@ import {
     TouchableOpacity,
     Text,
     SafeAreaView,
-    StatusBar
+    StatusBar,
+    KeyboardAvoidingView,
+    Platform,
+    TouchableWithoutFeedback,
+    Keyboard,
+    TextInput
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import Animated, {
@@ -26,7 +31,7 @@ const { height, width } = Dimensions.get('window');
 
 const MasterRiderDashboard = () => {
     // ESTADOS DE UI
-    const panelY = useSharedValue(height * 0.65); // Posición inicial del Bottom Sheet
+    const panelY = useSharedValue(height * 0.7); // Posición inicial ajustable
 
     // ESTADOS DE UBICACIÓN
     const [pickup, setPickup] = useState(null);
@@ -36,8 +41,8 @@ const MasterRiderDashboard = () => {
     const mapControlsStyle = useAnimatedStyle(() => {
         const bottomOffset = interpolate(
             panelY.value,
-            [height * 0.35, height * 0.65],
-            [height * 0.7, height * 0.4], // Sube cuando el panel sube
+            [height * 0.5, height * 0.7],
+            [height * 0.55, height * 0.35], // Margen dinámico: Altura BS + 20px aprox
             'clamp'
         );
         return {
@@ -46,27 +51,32 @@ const MasterRiderDashboard = () => {
     });
 
     const handleExpand = () => {
-        panelY.value = withSpring(height * 0.35, { damping: 15 });
+        panelY.value = withSpring(height * 0.5, { damping: 15 });
     };
 
     const handleCollapse = () => {
-        panelY.value = withSpring(height * 0.65, { damping: 15 });
+        panelY.value = withSpring(height * 0.7, { damping: 15 });
     };
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.container}
+        >
             <StatusBar barStyle="light-content" />
 
-            {/* CAPA 0: MAPA (FONDO) */}
-            <View style={styles.mapContainer}>
-                <LeafletView
-                    mapLayers={[{
-                        baseLayerName: 'CartoDB DarkMatter',
-                        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                    }]}
-                    zoom={15}
-                />
-            </View>
+            {/* CAPA 0: MAPA (FONDO) + CIERRE DE TECLADO */}
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.mapContainer}>
+                    <LeafletView
+                        mapLayers={[{
+                            baseLayerName: 'CartoDB DarkMatter',
+                            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                        }]}
+                        zoom={15}
+                    />
+                </View>
+            </TouchableWithoutFeedback>
 
             {/* CAPA 2: UI SUPERIOR FIJA (SEARCH & MENU) */}
             <SafeAreaView style={styles.topUI}>
@@ -102,13 +112,13 @@ const MasterRiderDashboard = () => {
             {/* CAPA 1: CONTROLES FLOTANTES REACTIVOS */}
             <Animated.View style={[styles.mapControls, mapControlsStyle]}>
                 <TouchableOpacity style={styles.controlButton}>
-                    <Ionicons name="add" size={20} color="#FFF" />
+                    <Ionicons name="add" size={16} color="#FFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.controlButton, { marginTop: 10 }]}>
-                    <Ionicons name="remove" size={20} color="#FFF" />
+                <TouchableOpacity style={[styles.controlButton, { marginTop: 8 }]}>
+                    <Ionicons name="remove" size={16} color="#FFF" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.controlButton, { marginTop: 20, backgroundColor: '#FFD600' }]}>
-                    <Ionicons name="locate" size={20} color="#000" />
+                <TouchableOpacity style={[styles.controlButton, { marginTop: 15, backgroundColor: '#FFD600' }]}>
+                    <Ionicons name="locate" size={16} color="#000" />
                 </TouchableOpacity>
             </Animated.View>
 
@@ -148,7 +158,7 @@ const MasterRiderDashboard = () => {
                     </TouchableOpacity>
                 ))}
             </DynamicBottomSheet>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 
