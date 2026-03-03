@@ -17,6 +17,7 @@ const { height } = Dimensions.get('window');
 
 /**
  * DynamicBottomSheet - Panel inferior con límites de altura y scroll interno
+ * Diseñado para colapsar suavemente con el teclado sin invadir el header.
  */
 const DynamicBottomSheet = ({ translateY, children }) => {
 
@@ -30,13 +31,16 @@ const DynamicBottomSheet = ({ translateY, children }) => {
         <Animated.View style={[styles.container, animatedStyle]}>
             <BlurView intensity={95} tint="dark" style={styles.glass}>
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={styles.dragHandle} />
+                    <View style={styles.handleWrapper}>
+                        <View style={styles.dragHandle} />
+                    </View>
                 </TouchableWithoutFeedback>
                 <ScrollView
                     style={styles.scroll}
                     contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
+                    bounces={false}
                 >
                     {children}
                 </ScrollView>
@@ -50,7 +54,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        height: height * 0.5, // Reducido al 50% según la nueva instrucción técnica
+        height: height * 0.5, // Altura máxima estricta (50% de la pantalla)
         zIndex: 30, // Capa 3
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
@@ -58,12 +62,15 @@ const styles = StyleSheet.create({
     },
     glass: {
         flex: 1,
-        paddingTop: 15,
         borderTopWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: 'rgba(255,255,255,0.12)',
+    },
+    handleWrapper: {
+        paddingVertical: 15,
+        alignItems: 'center',
     },
     dragHandle: {
-        width: 40,
+        width: 45,
         height: 5,
         backgroundColor: 'rgba(255,255,255,0.3)',
         borderRadius: 3,

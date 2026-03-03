@@ -23,26 +23,27 @@ import Animated, {
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 
-// Nuevos componentes refactorizados
+// Componentes refactorizados
 import LocationSearch from '../../components/LocationSearch';
 import DynamicBottomSheet from '../../components/DynamicBottomSheet';
 
 const { height, width } = Dimensions.get('window');
 
 const MasterRiderDashboard = () => {
-    // ESTADOS DE UI
-    const panelY = useSharedValue(height * 0.7); // Posición inicial ajustable
+    // ESTADOS DE UI - panelY ahora es la posición absoluta desde el fondo
+    const panelY = useSharedValue(height * 0.7);
 
     // ESTADOS DE UBICACIÓN
     const [pickup, setPickup] = useState(null);
     const [destination, setDestination] = useState(null);
 
     // ESTILOS ANIMADOS REACTIVOS (Capa 1: Controles del mapa)
+    // Los botones de Zoom deben reaccionar al Bottom Sheet para no ser cubiertos
     const mapControlsStyle = useAnimatedStyle(() => {
         const bottomOffset = interpolate(
             panelY.value,
             [height * 0.5, height * 0.7],
-            [height * 0.55, height * 0.35], // Margen dinámico: Altura BS + 20px aprox
+            [height * 0.55, height * 0.35], // Sube cuando el panel sube
             'clamp'
         );
         return {
@@ -59,106 +60,10 @@ const MasterRiderDashboard = () => {
     };
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.container}
-        >
-            <StatusBar barStyle="light-content" />
-
-            {/* CAPA 0: MAPA (FONDO) + CIERRE DE TECLADO */}
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                <View style={styles.mapContainer}>
-                    <LeafletView
-                        mapLayers={[{
-                            baseLayerName: 'CartoDB DarkMatter',
-                            url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                        }]}
-                        zoom={15}
-                    />
-                </View>
-            </TouchableWithoutFeedback>
-
-            {/* CAPA 2: UI SUPERIOR FIJA (SEARCH & MENU) */}
-            <SafeAreaView style={styles.topUI}>
-                <View style={styles.upperHeader}>
-                    <TouchableOpacity style={styles.roundButton}>
-                        <Ionicons name="menu" size={24} color="#FFF" />
-                    </TouchableOpacity>
-                    <View style={styles.searchStack}>
-                        <LocationSearch
-                            placeholder="¿Desde dónde?"
-                            icon="radio-button-on"
-                            iconColor="#00E676"
-                            onLocationSelect={(loc) => { setPickup(loc); handleExpand(); }}
-                        />
-                        <View style={styles.searchDivider} />
-                        <LocationSearch
-                            placeholder="¿A dónde vamos?"
-                            icon="location"
-                            iconColor="#FF5252"
-                            onLocationSelect={(loc) => { setDestination(loc); handleExpand(); }}
-                        />
-                    </View>
-                </View>
-
-                <TouchableOpacity style={styles.addStopButton}>
-                    <BlurView intensity={20} tint="dark" style={styles.addStopBlur}>
-                        <Ionicons name="add-circle-outline" size={18} color="#FFF" />
-                        <Text style={styles.addStopText}>Añadir Parada</Text>
-                    </BlurView>
-                </TouchableOpacity>
-            </SafeAreaView>
-
-            {/* CAPA 1: CONTROLES FLOTANTES REACTIVOS */}
-            <Animated.View style={[styles.mapControls, mapControlsStyle]}>
-                <TouchableOpacity style={styles.controlButton}>
-                    <Ionicons name="add" size={16} color="#FFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.controlButton, { marginTop: 8 }]}>
-                    <Ionicons name="remove" size={16} color="#FFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.controlButton, { marginTop: 15, backgroundColor: '#FFD600' }]}>
-                    <Ionicons name="locate" size={16} color="#000" />
-                </TouchableOpacity>
-            </Animated.View>
-
-            {/* CAPA 3: BOTTOM SHEET DINÁMICO (PEDIR VIAJE) */}
-            <DynamicBottomSheet translateY={panelY}>
-                <Text style={styles.sheetTitle}>Propón tu precio</Text>
-
-                <View style={styles.priceInputContainer}>
-                    <Text style={styles.currencySymbol}>₡</Text>
-                    <TextInput
-                        style={styles.priceInput}
-                        placeholder="2500"
-                        placeholderTextColor="#555"
-                        keyboardType="numeric"
-                    />
-                </View>
-
-                <View style={styles.optionsRow}>
-                    <TouchableOpacity style={styles.optionItem}>
-                        <Ionicons name="card-outline" size={20} color="#FFF" />
-                        <Text style={styles.optionLabel}>Efectivo</Text>
-                        <Ionicons name="chevron-down" size={14} color="#888" />
-                    </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity style={styles.orderButton}>
-                    <Text style={styles.orderButtonText}>PEDIR VIAJE NOW</Text>
-                </TouchableOpacity>
-
-                {/* CONTENIDO EXTRA PARA TEST SCROLL */}
-                <View style={[styles.divider, { marginVertical: 20 }]} />
-                <Text style={styles.historyTitle}>Viajes recientes</Text>
-                {[1, 2, 3].map((i) => (
-                    <TouchableOpacity key={i} style={styles.recentItem}>
-                        <Ionicons name="time-outline" size={20} color="#888" />
-                        <Text style={styles.recentText}>San José, Costa Rica #{i}</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity >
                 ))}
-            </DynamicBottomSheet>
-        </KeyboardAvoidingView>
+            </DynamicBottomSheet >
+        </KeyboardAvoidingView >
     );
 };
 
