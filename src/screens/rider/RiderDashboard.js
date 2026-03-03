@@ -14,9 +14,10 @@ import { calculateSuggestedPrice, generatePriceSuggestions, formatPrice } from '
 import { db } from '../../lib/firebase';
 import {
     collection, query, where, onSnapshot, addDoc, serverTimestamp,
+    doc, updateDoc, deleteDoc,
 } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
-import { scale, moderateScale, SCREEN_WIDTH, SCREEN_HEIGHT, DEVICE_SIZE } from '../../theme/responsive';
+import { scale, moderateScale, SCREEN_WIDTH, SCREEN_HEIGHT, DEVICE_SIZE, SAFE_TOP, SAFE_BOTTOM } from '../../theme/responsive';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,7 +28,9 @@ export default function RiderDashboard({ navigation }) {
     const mapRef = useRef(null);
     const slideAnim = useRef(new Animated.Value(0)).current;
 
-    const [myLocation, setMyLocation] = useState(null);
+    const [myLocation, setMyLocation] = useState(null); // Real GPS
+    const [pickupLocation, setPickupLocation] = useState(null); // Actual ride start
+    const [isManualPickup, setIsManualPickup] = useState(false);
     const [drivers, setDrivers] = useState([]);
     const [showPanel, setShowPanel] = useState(false);
     const [destination, setDestination] = useState(null);
@@ -42,12 +45,15 @@ export default function RiderDashboard({ navigation }) {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [showMenu, setShowMenu] = useState(false);
     const [rideStatus, setRideStatus] = useState(null); // null, 'searching', 'found'
+    const [currentRideId, setCurrentRideId] = useState(null);
+    const [rideUnsubscribe, setRideUnsubscribe] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
     const [mapZoom, setMapZoom] = useState(14);
     const [routeCoordinates, setRouteCoordinates] = useState([]);
+    const [routeInfo, setRouteInfo] = useState({ distance: 0, duration: 0 });
     const progressAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -81,12 +87,11 @@ export default function RiderDashboard({ navigation }) {
                 setPickupName(addr);
 
                 subscription = await watchLocation(async (newLoc) => {
-                    setMyLocation(prev => {
-                        if (!prev || calculateDistance(prev.latitude, prev.longitude, newLoc.latitude, newLoc.longitude) > 0.01) {
-                            reverseGeocode(newLoc.latitude, newLoc.longitude).then(setPickupName);
-                        }
-                        return newLoc;
-                    });
+                    setMyLocation(newLoc);
+                    if (!isManualPickup) {
+                        setPickupLocation(newLoc);
+                        reverseGeocode(newLoc.latitude, newLoc.longitude).then(setPickupName);
+                    }
                 });
             } catch (err) {
                 console.error(err);
@@ -128,34 +133,39 @@ export default function RiderDashboard({ navigation }) {
             }
         }
     };
-
     const updateDestination = async (lat, lng, isSilent = false) => {
         const latitude = lat;
         const longitude = lng;
 
-        if (activeSearchIndex === -1) {
+        // activeSearchIndex: -2 = pickup, -1 = destination, 0+ = stop
+        if (activeSearchIndex === -2) {
+            setPickupLocation({ latitude, longitude });
+            setIsManualPickup(true);
+        } else if (activeSearchIndex === -1) {
             setDestination({ latitude, longitude });
         } else {
             const newStops = [...stops];
-            newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], latitude, longitude };
+            newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], latitude, longitude, name: '' };
             setStops(newStops);
         }
 
-        if (myLocation) {
-            const validStops = stops.filter(s => s.latitude && s.longitude);
-            const points = [
-                { latitude: myLocation.latitude, longitude: myLocation.longitude },
-                ...validStops,
-            ];
-            if (activeSearchIndex === -1) {
-                points.push({ latitude, longitude });
-            } else {
-                points[activeSearchIndex + 1] = { latitude, longitude }; // +1 because pickup is index 0
-                if (destination) points.push({ latitude: destination.latitude, longitude: destination.longitude });
-            }
+        const validStops = stops.filter((s, idx) =>
+            (idx === activeSearchIndex) ? (latitude && longitude) : (s.latitude && s.longitude)
+        );
 
-            // Remove any potential undefined slots if indexes are weird
-            const cleanPoints = points.filter(p => p && p.latitude && p.longitude);
+        const points = [
+            { latitude: pickupLocation?.latitude || myLocation?.latitude, longitude: pickupLocation?.longitude || myLocation?.longitude },
+            ...validStops,
+        ];
+
+        if (activeSearchIndex === -1) {
+            points.push({ latitude, longitude });
+        } else {
+            if (destination) points.push({ latitude: destination.latitude, longitude: destination.longitude });
+        }
+
+        const cleanPoints = points.filter(p => p && p.latitude && p.longitude);
+        if (cleanPoints.length >= 2) {
             const route = await getRoute(cleanPoints);
             if (route) {
                 setRouteInfo({
@@ -163,6 +173,11 @@ export default function RiderDashboard({ navigation }) {
                     duration: Math.ceil(route.duration)
                 });
                 setRouteCoordinates(route.coordinates);
+                const pricing = calculateSuggestedPrice(route.distance, route.duration);
+                setPriceSuggestions(generatePriceSuggestions(pricing.suggestedPrice));
+                setSelectedPrice(pricing.suggestedPrice);
+                setMinPrice(pricing.suggestedPrice);
+                setCustomPrice(pricing.suggestedPrice.toString());
 
                 if (mapRef.current && route.coordinates.length > 0) {
                     const bounds = route.coordinates.map(c => [c.lat, c.lng]);
@@ -171,43 +186,59 @@ export default function RiderDashboard({ navigation }) {
                             window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
                         }
                     `);
-                    const pricing = calculateSuggestedPrice(route.distance, route.duration);
-                    const suggestions = generatePriceSuggestions(pricing.suggestedPrice);
-                    setPriceSuggestions(suggestions);
-                    setSelectedPrice(pricing.suggestedPrice);
-                    setMinPrice(pricing.suggestedPrice);
-                    setCustomPrice(pricing.suggestedPrice.toString());
-                } else {
-                    // Fallback to straight line if OSRM fails
-                    const dist = calculateDistance(myLocation.latitude, myLocation.longitude, latitude, longitude);
-                    const pricing = calculateSuggestedPrice(dist || 0);
-                    setMinPrice(pricing.suggestedPrice);
-                    setSelectedPrice(pricing.suggestedPrice);
-                    setCustomPrice(pricing.suggestedPrice.toString());
-                    setRouteInfo({
-                        distance: pricing.distanceKm || 0,
-                        duration: pricing.estimatedMinutes || 2
-                    });
-                    setRouteCoordinates([]);
                 }
             }
+        }
 
-            if (!isSilent) {
-                const details = await getPlaceDetails(latitude, longitude);
-                if (activeSearchIndex === -1) {
-                    setDestinationName(details.address);
-                } else {
-                    const newStops = [...stops];
-                    newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], name: details.address };
-                    setStops(newStops);
-                }
+        if (!isSilent) {
+            const details = await getPlaceDetails(latitude, longitude);
+            if (activeSearchIndex === -2) {
+                setPickupName(details.address);
+            } else if (activeSearchIndex === -1) {
+                setDestinationName(details.address);
+            } else {
+                const newStops = [...stops];
+                newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], name: details.address };
+                setStops(newStops);
             }
+        }
+    };
+
+    const removeStop = async (index) => {
+        const newStops = stops.filter((_, i) => i !== index);
+        setStops(newStops);
+
+        const currentPickup = pickupLocation || myLocation;
+        const points = [{ latitude: currentPickup.latitude, longitude: currentPickup.longitude }];
+        newStops.forEach(s => {
+            if (s.latitude && s.longitude) points.push(s);
+        });
+        if (destination) points.push(destination);
+
+        if (points.length >= 2) {
+            const route = await getRoute(points);
+            if (route) {
+                setRouteInfo({
+                    distance: parseFloat(route.distance.toFixed(2)),
+                    duration: Math.ceil(route.duration)
+                });
+                setRouteCoordinates(route.coordinates);
+                const pricing = calculateSuggestedPrice(route.distance, route.duration);
+                setPriceSuggestions(generatePriceSuggestions(pricing.suggestedPrice));
+                setSelectedPrice(pricing.suggestedPrice);
+                setMinPrice(pricing.suggestedPrice);
+                setCustomPrice(pricing.suggestedPrice.toString());
+            }
+        } else {
+            setRouteInfo({ distance: 0, duration: 0 });
+            setRouteCoordinates([]);
+            setPriceSuggestions([]);
         }
     };
 
     useEffect(() => {
         const delaySearch = setTimeout(async () => {
-            if (searchQuery.length >= 3) {
+            if (searchQuery.length >= 2) {
                 setIsSearching(true);
                 const results = await searchPlaces(
                     searchQuery,
@@ -223,13 +254,122 @@ export default function RiderDashboard({ navigation }) {
         return () => clearTimeout(delaySearch);
     }, [searchQuery]);
 
-    const selectSearchResult = (item) => {
-        if (activeSearchIndex === -1) {
+    const togglePanel = () => {
+        const toValue = showPanel ? 0 : 1;
+        Animated.spring(slideAnim, {
+            toValue,
+            useNativeDriver: true,
+            damping: 15,
+            stiffness: 90,
+        }).start();
+        setShowPanel(!showPanel);
+    };
+
+    const sendRideRequest = async () => {
+        const finalPrice = Number(customPrice);
+        if (!finalPrice || finalPrice < minPrice) {
+            Alert.alert('Precio inválido', `El monto no puede ser menor a ₡${minPrice} (Tarifa calculada)`);
+            return;
+        }
+
+        // --- CRASH FIX ---
+        // Validate destination is set before attempting to read its properties
+        if (!destination || !destination.latitude || !destination.longitude) {
+            Alert.alert('Destino Requerido', 'Por favor selecciona un destino válido antes de solicitar el viaje.');
+            return;
+        }
+
+        try {
+            setRideStatus('searching');
+            const rideData = {
+                riderId: user.uid,
+                riderName: userData?.name || 'Pasajero',
+                riderRating: userData?.rating || 5.0,
+                status: 'pending',
+                pickup: {
+                    latitude: pickupLocation?.latitude || myLocation.latitude,
+                    longitude: pickupLocation?.longitude || myLocation.longitude,
+                    name: pickupName,
+                },
+                dropoff: {
+                    latitude: destination.latitude,
+                    longitude: destination.longitude,
+                    name: destinationName,
+                },
+                dropoffs: [
+                    ...stops.filter(s => s.latitude && s.longitude).map(s => ({ latitude: s.latitude, longitude: s.longitude, name: s.name })),
+                    {
+                        latitude: destination.latitude,
+                        longitude: destination.longitude,
+                        name: destinationName,
+                    }
+                ],
+                distance: routeInfo.distance,
+                duration: routeInfo.duration,
+                proposedPrice: Number(customPrice),
+                acceptedPrice: null,
+                paymentMethod,
+                commission: Math.round(Number(customPrice) * 0.01),
+                createdAt: serverTimestamp(),
+                completedAt: null,
+            };
+
+            const rideRef = await addDoc(collection(db, 'rides'), rideData);
+            setCurrentRideId(rideRef.id);
+
+            const unsubscribe = onSnapshot(rideRef, (doc) => {
+                const data = doc.data();
+                if (data?.status === 'accepted') {
+                    setRideStatus('found');
+                    setCurrentRideId(null);
+                    setRideUnsubscribe(null);
+                    unsubscribe();
+                    navigation.navigate('RideTracking', {
+                        rideId: rideRef.id,
+                        driverId: data.driverId,
+                    });
+                }
+            });
+            setRideUnsubscribe(() => unsubscribe);
+
+            Alert.alert('¡Enviado!', 'Buscando chofer cercano...');
+        } catch (error) {
+            Alert.alert('Error', 'No se pudo enviar la solicitud');
+            setRideStatus(null);
+            setCurrentRideId(null);
+        }
+    };
+
+    const cancelRideRequest = async () => {
+        try {
+            if (rideUnsubscribe) {
+                rideUnsubscribe();
+                setRideUnsubscribe(null);
+            }
+            if (currentRideId) {
+                await updateDoc(doc(db, 'rides', currentRideId), { status: 'cancelled' });
+                setCurrentRideId(null);
+            }
+            setRideStatus(null);
+        } catch (error) {
+            console.error('Error cancelling ride:', error);
+            setRideStatus(null);
+            setCurrentRideId(null);
+        }
+    };
+
+    const selectSearchResult = async (item) => {
+        if (activeSearchIndex === -2) {
+            // MANUAL PICKUP SELECTION
+            setPickupLocation({ latitude: item.latitude, longitude: item.longitude });
+            setPickupName(item.address || item.name || item.shortName);
+            setIsManualPickup(true);
+        } else if (activeSearchIndex === -1) {
             setDestination({ latitude: item.latitude, longitude: item.longitude });
-            setDestinationName(item.name);
+            setDestinationName(item.name || item.shortName || item.address);
         } else {
             const newStops = [...stops];
-            newStops[activeSearchIndex] = { latitude: item.latitude, longitude: item.longitude, name: item.name };
+            newStops[activeSearchIndex] = { latitude: item.latitude, longitude: item.longitude, name: item.name || item.shortName || item.address };
             setStops(newStops);
         }
 
@@ -243,10 +383,11 @@ export default function RiderDashboard({ navigation }) {
         }
 
         if (myLocation) {
-            const fetchRoute = async () => {
+            try {
                 const validStops = stops.filter(s => s.latitude && s.longitude);
+                const currentPickup = pickupLocation || myLocation;
                 const points = [
-                    { latitude: myLocation.latitude, longitude: myLocation.longitude },
+                    { latitude: currentPickup.latitude, longitude: currentPickup.longitude },
                     ...validStops,
                 ];
                 if (activeSearchIndex === -1) {
@@ -281,8 +422,9 @@ export default function RiderDashboard({ navigation }) {
                     setMinPrice(pricing.suggestedPrice);
                     setCustomPrice(pricing.suggestedPrice.toString());
                 } else {
+                    const currentPickup = pickupLocation || myLocation;
                     const dist = calculateDistance(
-                        myLocation.latitude, myLocation.longitude,
+                        currentPickup.latitude, currentPickup.longitude,
                         item.latitude, item.longitude
                     );
                     const pricing = calculateSuggestedPrice(dist || 0);
@@ -295,85 +437,11 @@ export default function RiderDashboard({ navigation }) {
                     });
                     setRouteCoordinates([]);
                 }
-            };
-            fetchRoute();
+            } catch (error) {
+                console.error("Error fetching route in selectSearchResult:", error);
+            }
         }
-
         if (!showPanel) togglePanel();
-    };
-
-    const togglePanel = () => {
-        const toValue = showPanel ? 0 : 1;
-        Animated.spring(slideAnim, {
-            toValue,
-            useNativeDriver: true,
-            damping: 15,
-            stiffness: 90,
-        }).start();
-        setShowPanel(!showPanel);
-    };
-
-    const sendRideRequest = async () => {
-        if (!destination) {
-            Alert.alert('Error', 'Selecciona un destino tocando el mapa');
-            return;
-        }
-
-        const finalPrice = Number(customPrice);
-        if (!finalPrice || finalPrice < minPrice) {
-            Alert.alert('Precio inválido', `El monto no puede ser menor a ₡${minPrice} (Tarifa calculada)`);
-            return;
-        }
-
-        try {
-            setRideStatus('searching');
-            const rideData = {
-                riderId: user.uid,
-                riderName: userData?.name || 'Pasajero',
-                riderRating: userData?.rating || 5.0,
-                status: 'pending',
-                pickup: {
-                    latitude: myLocation.latitude,
-                    longitude: myLocation.longitude,
-                    name: pickupName,
-                },
-                dropoffs: [
-                    ...stops.filter(s => s.latitude && s.longitude).map(s => ({ latitude: s.latitude, longitude: s.longitude, name: s.name })),
-                    {
-                        latitude: destination.latitude,
-                        longitude: destination.longitude,
-                        name: destinationName,
-                    }
-                ],
-                distance: routeInfo.distance,
-                duration: routeInfo.duration,
-                proposedPrice: Number(customPrice),
-                acceptedPrice: null,
-                paymentMethod,
-                commission: Math.round(Number(customPrice) * 0.01),
-                createdAt: serverTimestamp(),
-                completedAt: null,
-            };
-
-            const rideRef = await addDoc(collection(db, 'rides'), rideData);
-
-            const unsubscribe = onSnapshot(rideRef, (doc) => {
-                const data = doc.data();
-                if (data?.status === 'accepted') {
-                    setRideStatus('found');
-                    unsubscribe();
-                    navigation.navigate('RideTracking', {
-                        rideId: rideRef.id,
-                        driverId: data.driverId,
-                    });
-                }
-            });
-
-            Alert.alert('¡Enviado!', 'Buscando chofer cercano...');
-        } catch (error) {
-            Alert.alert('Error', 'No se pudo enviar la solicitud');
-            setRideStatus(null);
-        }
     };
 
     const panelTranslateY = slideAnim.interpolate({
@@ -414,21 +482,28 @@ export default function RiderDashboard({ navigation }) {
                                 {
                                     id: 'user-loc',
                                     position: { lat: myLocation.latitude, lng: myLocation.longitude },
-                                    icon: '📍',
+                                    icon: '📍 A', // Start is always A
                                     size: [32, 32],
                                 },
                                 ...stops.filter(s => s.latitude && s.longitude).map((s, index) => ({
                                     id: `stop-${index}`,
                                     position: { lat: s.latitude, lng: s.longitude },
-                                    icon: String.fromCharCode(66 + index), // B, C, D...
+                                    icon: `📍 ${String.fromCharCode(66 + index)}`, // B, C, D...
                                     size: [32, 32],
                                 })),
                                 ...(destination ? [{
                                     id: 'destination',
                                     position: { lat: destination.latitude, lng: destination.longitude },
-                                    icon: String.fromCharCode(66 + stops.filter(s => s.latitude && s.longitude).length), // Always the last letter
+                                    icon: `📍 ${String.fromCharCode(66 + stops.filter(s => s.latitude && s.longitude).length)}`, // Always the last letter
                                     size: [32, 32],
                                 }] : []),
+                                // Online drivers
+                                ...drivers.map(d => ({
+                                    id: `driver-${d.id}`,
+                                    position: { lat: d.location.latitude, lng: d.location.longitude },
+                                    icon: '🟢🚗',
+                                    size: [32, 32],
+                                })),
                             ]}
                             mapShapes={routeCoordinates.length > 0 ? [{
                                 shapeType: 'Polyline',
@@ -487,10 +562,14 @@ export default function RiderDashboard({ navigation }) {
                 {!isMapPickerMode && (
                     <View style={styles.searchContainer}>
                         <View style={styles.searchInputWrapper}>
-                            <Text style={{ fontSize: 18, marginRight: 10 }}>🔍</Text>
+                            <Text style={{ fontSize: moderateScale(18), marginRight: 10 }}>🔍</Text>
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder={activeSearchIndex === -1 ? "📍 ¿A dónde vamos en CR?" : `📍 Agregar Parada ${activeSearchIndex + 1}`}
+                                placeholder={
+                                    activeSearchIndex === -2 ? "📍 ¿Dónde te recojo?" :
+                                        activeSearchIndex === -1 ? "🏁 ¿A dónde vamos?" :
+                                            `📍 Agregar Parada ${activeSearchIndex + 1}`
+                                }
                                 placeholderTextColor={COLORS.textMuted}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
@@ -500,41 +579,66 @@ export default function RiderDashboard({ navigation }) {
                             />
                             {searchQuery.length > 0 && (
                                 <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                    <Text style={styles.clearIcon}>✕</Text>
+                                    <View style={styles.clearBadge}>
+                                        <Text style={styles.clearIconText}>✕</Text>
+                                    </View>
                                 </TouchableOpacity>
                             )}
                         </View>
 
-                        {searchResults.length > 0 && (
-                            <Animated.View style={[styles.resultsContainer, { opacity: slideAnim }]}>
-                                <View style={{ marginBottom: SPACING.md, alignItems: 'center' }}>
-                                    <Text style={styles.summaryTitle}>Resumen del Viaje</Text>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 15, marginBottom: 8 }}>
-                                        <Text style={styles.metricValue}>📏 {routeInfo.distance} km</Text>
-                                        <Text style={styles.metricValue}>⏱️ {routeInfo.duration} min</Text>
-                                    </View>
-                                    <Text style={styles.addressText} numberOfLines={1}>📍 {pickupName}</Text>
-                                    <Text style={styles.addressText} numberOfLines={1}>🏁 {destinationName}</Text>
-                                </View>
-                                <ScrollView
-                                    style={{ maxHeight: 250 }}
-                                    showsVerticalScrollIndicator={true}
-                                    keyboardShouldPersistTaps="handled"
-                                >
-                                    {searchResults.map((item) => (
-                                        <TouchableOpacity
-                                            key={item.id}
-                                            style={styles.resultItem}
-                                            onPress={() => selectSearchResult(item)}
+                        {(searchResults.length > 0 || activeSearchIndex === -2) && (
+                            <Animated.View style={[styles.resultsContainer, { opacity: slideAnim, maxHeight: 400 }]}>
+                                {activeSearchIndex === -2 && (
+                                    <TouchableOpacity
+                                        style={styles.currentLocResult}
+                                        onPress={async () => {
+                                            setIsManualPickup(false);
+                                            const loc = await getCurrentLocation();
+                                            setMyLocation(loc);
+                                            setPickupLocation(loc);
+                                            const addr = await reverseGeocode(loc.latitude, loc.longitude);
+                                            setPickupName(addr);
+                                            setSearchQuery('');
+                                            setSearchResults([]);
+                                            if (mapRef.current) {
+                                                mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16);`);
+                                            }
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: moderateScale(20) }}>🎯</Text>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.currentLocTitle}>Ubicación Actual</Text>
+                                            <Text style={styles.currentLocSubtitle} numberOfLines={1}>Tocar para resetear GPS</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                )}
+
+                                {searchResults.length > 0 && (
+                                    <>
+                                        <View style={{ marginBottom: SPACING.md, alignItems: 'center', marginTop: activeSearchIndex === -2 ? 10 : 0 }}>
+                                            <Text style={styles.summaryTitle}>Resultados de Búsqueda</Text>
+                                        </View>
+                                        <ScrollView
+                                            style={{ maxHeight: 250 }}
+                                            showsVerticalScrollIndicator={true}
+                                            keyboardShouldPersistTaps="handled"
                                         >
-                                            <Text style={styles.resultPin}>📍</Text>
-                                            <View style={styles.resultInfo}>
-                                                <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
-                                                <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
-                                            </View>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
+                                            {searchResults.map((item) => (
+                                                <TouchableOpacity
+                                                    key={item.id}
+                                                    style={styles.resultItem}
+                                                    onPress={() => selectSearchResult(item)}
+                                                >
+                                                    <Text style={styles.resultPin}>📍</Text>
+                                                    <View style={styles.resultInfo}>
+                                                        <Text style={styles.resultName} numberOfLines={1}>{item.shortName}</Text>
+                                                        <Text style={styles.resultAddress} numberOfLines={1}>{item.address}</Text>
+                                                    </View>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </>
+                                )}
                             </Animated.View>
                         )}
                     </View>
@@ -561,14 +665,14 @@ export default function RiderDashboard({ navigation }) {
                             <View style={styles.metricItem}>
                                 <Text style={styles.metricEmoji}>📏</Text>
                                 <Text style={styles.metricValue}>
-                                    {routeInfo.distance || '0.0'} km
+                                    {routeInfo?.distance || '0.0'} km
                                 </Text>
                             </View>
                             <View style={styles.metricDivider} />
                             <View style={styles.metricItem}>
                                 <Text style={styles.metricEmoji}>⏱️</Text>
                                 <Text style={styles.metricValue}>
-                                    {routeInfo.duration || '2'} min
+                                    {routeInfo?.duration || '2'} min
                                 </Text>
                             </View>
                         </View>
@@ -577,8 +681,30 @@ export default function RiderDashboard({ navigation }) {
                             style={styles.confirmMapPicker}
                             onPress={async () => {
                                 setIsMapPickerMode(false);
-                                const details = await getPlaceDetails(destination.latitude, destination.longitude);
-                                setDestinationName(details.address);
+                                let lat, lng;
+                                if (activeSearchIndex === -2) {
+                                    lat = myLocation.latitude;
+                                    lng = myLocation.longitude;
+                                } else if (activeSearchIndex === -1) {
+                                    lat = destination.latitude;
+                                    lng = destination.longitude;
+                                } else {
+                                    lat = stops[activeSearchIndex].latitude;
+                                    lng = stops[activeSearchIndex].longitude;
+                                }
+
+                                const details = await getPlaceDetails(lat, lng);
+
+                                if (activeSearchIndex === -2) {
+                                    setPickupName(details.address);
+                                } else if (activeSearchIndex === -1) {
+                                    setDestinationName(details.address);
+                                } else {
+                                    const newStops = [...stops];
+                                    newStops[activeSearchIndex].name = details.address;
+                                    setStops(newStops);
+                                }
+
                                 if (!showPanel) togglePanel();
                             }}
                         >
@@ -619,155 +745,191 @@ export default function RiderDashboard({ navigation }) {
                                 { transform: [{ translateY: panelTranslateY }] },
                             ]}
                         >
-                            <View style={styles.locationRow}>
-                                <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
-                                <View style={styles.locationInfo}>
-                                    <Text style={styles.locationLabel}>Recoger en</Text>
-                                    <Text style={styles.locationName}>{pickupName || 'Tu ubicación actual'}</Text>
-                                </View>
-                            </View>
-
-                            {stops.map((stop, index) => (
-                                <View key={index} style={styles.locationRow}>
-                                    <View style={[styles.locationDot, { backgroundColor: COLORS.warning }]} />
+                            <ScrollView
+                                style={{ maxHeight: SCREEN_HEIGHT * 0.55 }}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingBottom: 20 }}
+                                keyboardShouldPersistTaps="handled"
+                            >
+                                <View style={styles.locationRow}>
+                                    <View style={[styles.locationDot, { backgroundColor: COLORS.success }]} />
                                     <View style={styles.locationInfo}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Text style={styles.locationLabel}>Parada {index + 1}</Text>
-                                            <TouchableOpacity onPress={() => {
-                                                setActiveSearchIndex(index);
-                                                setSearchQuery('');
-                                            }}>
-                                                <Text style={styles.mapPickText}>Cambiar</Text>
+                                            <Text style={styles.locationLabel}>Punto de Recogida (A)</Text>
+                                            <TouchableOpacity
+                                                style={styles.stopActionBtn}
+                                                onPress={() => {
+                                                    setActiveSearchIndex(-2); // -2 is manual pickup search
+                                                    setSearchQuery('');
+                                                }}
+                                            >
+                                                <Text style={styles.stopActionEdit}>✏️</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                        <Text style={styles.locationName} numberOfLines={2}>{pickupName || 'Tu ubicación actual'}</Text>
+                                    </View>
+                                </View>
+
+                                {stops.map((stop, index) => (
+                                    <View key={index} style={styles.locationRow}>
+                                        <View style={[styles.locationDot, { backgroundColor: COLORS.warning }]} />
+                                        <View style={styles.locationInfo}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Text style={styles.locationLabel}>Parada {String.fromCharCode(66 + index)}</Text>
+                                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                                    <TouchableOpacity
+                                                        style={styles.stopActionBtn}
+                                                        onPress={() => removeStop(index)}
+                                                    >
+                                                        <Text style={styles.stopActionRemove}>➖</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={styles.stopActionBtn}
+                                                        onPress={() => {
+                                                            setActiveSearchIndex(index);
+                                                            setSearchQuery('');
+                                                        }}
+                                                    >
+                                                        <Text style={styles.stopActionEdit}>✏️</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                            <Text style={styles.locationName} numberOfLines={2}>
+                                                {stop.name || 'Buscando...'}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                ))}
+
+                                <View style={styles.locationRow}>
+                                    <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
+                                    <View style={styles.locationInfo}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Text style={styles.locationLabel}>Destino Final ({String.fromCharCode(66 + stops.filter(s => s?.latitude).length)})</Text>
+                                            <TouchableOpacity
+                                                style={styles.stopActionBtn}
+                                                onPress={() => {
+                                                    setActiveSearchIndex(-1);
+                                                    if (!destination && myLocation) {
+                                                        setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
+                                                    }
+                                                    setIsMapPickerMode(true);
+                                                    if (showPanel) togglePanel();
+                                                }}
+                                            >
+                                                <Text style={styles.stopActionEdit}>🗺️</Text>
                                             </TouchableOpacity>
                                         </View>
                                         <Text style={styles.locationName} numberOfLines={2}>
-                                            {stop.name || 'Buscando...'}
+                                            {destinationName || 'Selecciona un destino'}
                                         </Text>
                                     </View>
                                 </View>
-                            ))}
 
-                            <View style={styles.locationRow}>
-                                <View style={[styles.locationDot, { backgroundColor: COLORS.error }]} />
-                                <View style={styles.locationInfo}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Text style={styles.locationLabel}>Destino Final</Text>
-                                        <TouchableOpacity onPress={() => {
-                                            setActiveSearchIndex(-1);
-                                            if (!destination && myLocation) {
-                                                setDestination({ latitude: myLocation.latitude, longitude: myLocation.longitude });
-                                            }
-                                            setIsMapPickerMode(true);
-                                            if (showPanel) togglePanel();
-                                        }}>
-                                            <Text style={styles.mapPickText}>Mapa</Text>
+                                {stops.length < 3 && destination && (
+                                    <View style={styles.addStopRow}>
+                                        <View style={styles.addStopLine} />
+                                        <TouchableOpacity
+                                            style={styles.addStopBtn}
+                                            onPress={() => {
+                                                const newIndex = stops.length;
+                                                setStops([...stops, { latitude: null, longitude: null, name: '' }]);
+                                                setActiveSearchIndex(newIndex);
+                                                if (showPanel) togglePanel(); // Collapse panel to bring focus to the search bar
+                                            }}
+                                        >
+                                            <Text style={styles.addStopEmoji}>➕</Text>
+                                            <Text style={styles.addStopText}>Añadir Parada</Text>
                                         </TouchableOpacity>
-                                    </View>
-                                    <Text style={styles.locationName} numberOfLines={2}>
-                                        {destinationName || 'Selecciona un destino'}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {stops.length < 3 && destination && (
-                                <View style={styles.addStopRow}>
-                                    <View style={styles.addStopLine} />
-                                    <TouchableOpacity
-                                        style={styles.addStopBtn}
-                                        onPress={() => {
-                                            const newIndex = stops.length;
-                                            setStops([...stops, { latitude: null, longitude: null, name: '' }]);
-                                            setActiveSearchIndex(newIndex);
-                                            if (showPanel) togglePanel(); // Collapse panel to bring focus to the search bar
-                                        }}
-                                    >
-                                        <Text style={styles.addStopEmoji}>➕</Text>
-                                        <Text style={styles.addStopText}>Añadir Parada</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-
-                            <ScrollView
-                                horizontal={true}
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={{ paddingVertical: 10 }}
-                            >
-                                {priceSuggestions.length > 0 && (
-                                    <View style={styles.priceSection}>
-                                        <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
-                                        <View style={styles.priceGrid}>
-                                            {priceSuggestions.map((item, index) => (
-                                                <TouchableOpacity
-                                                    key={index}
-                                                    style={[
-                                                        styles.priceSuggestion,
-                                                        selectedPrice === item.price && styles.priceChipActive,
-                                                    ]}
-                                                    onPress={() => {
-                                                        setSelectedPrice(item.price);
-                                                        setCustomPrice(item.price.toString());
-                                                    }}
-                                                >
-                                                    <Text style={[
-                                                        styles.priceChipText,
-                                                        selectedPrice === item.price && styles.priceChipTextActive
-                                                    ]}>
-                                                        {item.label}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </View>
                                     </View>
                                 )}
                             </ScrollView>
 
-                            <View style={styles.customPriceRow}>
-                                <Text style={styles.currencySymbol}>₡</Text>
-                                <TextInput
-                                    style={styles.customPriceInput}
-                                    value={customPrice}
-                                    onChangeText={setCustomPrice}
-                                    keyboardType="numeric"
-                                    placeholder="Precio personalizado"
-                                    placeholderTextColor={COLORS.textMuted}
-                                />
-                            </View>
+                            <View style={styles.fixedBottomContainer}>
+                                {/* Price Suggestions */}
 
-                            <View style={styles.paymentRow}>
-                                <TouchableOpacity
-                                    style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
-                                    onPress={() => setPaymentMethod('cash')}
+                                <ScrollView
+                                    horizontal={true}
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={{ paddingVertical: 10 }}
                                 >
-                                    <Text style={styles.paymentEmoji}>💵</Text>
-                                    <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
-                                    onPress={() => setPaymentMethod('sinpe')}
-                                >
-                                    <Text style={styles.paymentEmoji}>📱</Text>
-                                    <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
-                                </TouchableOpacity>
-                            </View>
+                                    {priceSuggestions.length > 0 && (
+                                        <View style={styles.priceSection}>
+                                            <Text style={styles.priceSectionTitle}>Propone tu precio</Text>
+                                            <View style={styles.priceGrid}>
+                                                {priceSuggestions.map((item, index) => (
+                                                    <TouchableOpacity
+                                                        key={index}
+                                                        style={[
+                                                            styles.priceSuggestion,
+                                                            selectedPrice === item.price && styles.priceChipActive,
+                                                        ]}
+                                                        onPress={() => {
+                                                            setSelectedPrice(item.price);
+                                                            setCustomPrice(item.price.toString());
+                                                        }}
+                                                    >
+                                                        <Text style={[
+                                                            styles.priceChipText,
+                                                            selectedPrice === item.price && styles.priceChipTextActive
+                                                        ]}>
+                                                            {item.label}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </View>
+                                        </View>
+                                    )}
+                                </ScrollView>
 
-                            <View style={styles.actionRow}>
-                                <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
-                                    <Text style={styles.cancelBtnText}>✕</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
-                                    activeOpacity={0.8}
-                                    onPress={sendRideRequest}
-                                    disabled={rideStatus === 'searching'}
-                                >
-                                    <Text style={styles.sendBtnText}>
-                                        {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
-                                    </Text>
-                                </TouchableOpacity>
+                                <View style={styles.customPriceRow}>
+                                    <Text style={styles.currencySymbol}>₡</Text>
+                                    <TextInput
+                                        style={styles.customPriceInput}
+                                        value={customPrice}
+                                        onChangeText={setCustomPrice}
+                                        keyboardType="numeric"
+                                        placeholder="Precio personalizado"
+                                        placeholderTextColor={COLORS.textMuted}
+                                    />
+                                </View>
+
+                                <View style={styles.paymentRow}>
+                                    <TouchableOpacity
+                                        style={[styles.paymentBtn, paymentMethod === 'cash' && styles.paymentBtnActive]}
+                                        onPress={() => setPaymentMethod('cash')}
+                                    >
+                                        <Text style={styles.paymentEmoji}>💵</Text>
+                                        <Text style={[styles.paymentText, paymentMethod === 'cash' && styles.paymentTextActive]}>Efectivo</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.paymentBtn, paymentMethod === 'sinpe' && styles.paymentBtnActive]}
+                                        onPress={() => setPaymentMethod('sinpe')}
+                                    >
+                                        <Text style={styles.paymentEmoji}>📱</Text>
+                                        <Text style={[styles.paymentText, paymentMethod === 'sinpe' && styles.paymentTextActive]}>SINPE</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.actionRow}>
+                                    <TouchableOpacity style={styles.cancelBtn} onPress={togglePanel}>
+                                        <Text style={styles.cancelBtnText}>✕</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.sendBtn, rideStatus === 'searching' && styles.sendBtnSearching]}
+                                        activeOpacity={0.8}
+                                        onPress={sendRideRequest}
+                                        disabled={rideStatus === 'searching'}
+                                    >
+                                        <Text style={styles.sendBtnText}>
+                                            {rideStatus === 'searching' ? 'Buscando...' : 'Pedir Viaje Now'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </Animated.View>
                     )}
-                </View >
+                </View>
 
                 <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
                     <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
@@ -819,7 +981,7 @@ export default function RiderDashboard({ navigation }) {
                                     <Text style={styles.searchingEmoji}>🚗</Text>
                                 </Animated.View>
                                 <Text style={styles.searchingTitle}>Buscando Conductores</Text>
-                                <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard en Costa Rica...</Text>
+                                <Text style={styles.searchingSub}>Estamos conectándote con la flota de Elysium Vanguard Driving en Costa Rica...</Text>
 
                                 <View style={styles.searchingProgressContainer}>
                                     <Animated.View style={[styles.searchingProgressBar, {
@@ -834,10 +996,7 @@ export default function RiderDashboard({ navigation }) {
 
                                 <TouchableOpacity
                                     style={styles.cancelRequestBtn}
-                                    onPress={() => {
-                                        setRideStatus(null);
-                                        // Reset animations if needed
-                                    }}
+                                    onPress={cancelRideRequest}
                                 >
                                     <Text style={styles.cancelRequestText}>Cancelar Solicitud</Text>
                                 </TouchableOpacity>
@@ -860,7 +1019,7 @@ const styles = StyleSheet.create({
     },
     menuButton: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 55 : 35,
+        top: SAFE_TOP,
         left: SPACING.md,
         zIndex: 110,
         backgroundColor: COLORS.bgCard,
@@ -901,8 +1060,8 @@ const styles = StyleSheet.create({
     },
     searchContainer: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 55 : 35,
-        left: scale(70),
+        top: SAFE_TOP,
+        left: scale(75),
         right: SPACING.md,
         zIndex: 100,
     },
@@ -926,12 +1085,20 @@ const styles = StyleSheet.create({
         fontSize: moderateScale(15),
         color: COLORS.textPrimary,
         fontWeight: '500',
-        textAlign: DEVICE_SIZE.SMALL ? 'center' : 'left',
+        paddingRight: 10,
     },
-    clearIcon: {
-        padding: 5,
+    clearBadge: {
+        backgroundColor: COLORS.border,
+        width: scale(24),
+        height: scale(24),
+        borderRadius: scale(12),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    clearIconText: {
         color: COLORS.textMuted,
-        fontSize: 16,
+        fontSize: moderateScale(12),
+        fontWeight: 'bold',
     },
     resultsContainer: {
         backgroundColor: COLORS.bgCard,
@@ -972,19 +1139,19 @@ const styles = StyleSheet.create({
         borderBottomColor: COLORS.border + '22',
     },
     resultPin: {
-        fontSize: 18,
-        marginRight: 12,
+        fontSize: moderateScale(18),
+        marginRight: scale(12),
     },
     resultInfo: {
         flex: 1,
     },
     resultName: {
-        fontSize: 14,
+        fontSize: moderateScale(14),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
     },
     resultAddress: {
-        fontSize: 12,
+        fontSize: moderateScale(12),
         color: COLORS.textMuted,
     },
     bottomSection: {
@@ -997,56 +1164,80 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
     },
     whereToBtn: {
-        backgroundColor: COLORS.bgCard,
+        backgroundColor: COLORS.glassBg,
         borderRadius: RADIUS.xl,
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: 18,
+        paddingHorizontal: scale(SPACING.lg),
+        paddingVertical: scale(18),
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: COLORS.border,
-        elevation: 8,
+        borderColor: COLORS.neonBlue,
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 10,
     },
     whereToIcon: {
-        fontSize: 20,
-        marginRight: SPACING.sm,
+        fontSize: moderateScale(20),
+        marginRight: scale(SPACING.sm),
     },
     whereToText: {
         flex: 1,
-        fontSize: 18,
-        fontWeight: '600',
-        color: COLORS.textSecondary,
+        fontSize: moderateScale(18),
+        fontWeight: 'bold',
+        color: COLORS.neonBlue,
     },
     whereToArrow: {
-        fontSize: 18,
+        fontSize: moderateScale(18),
         color: COLORS.accent,
         fontWeight: 'bold',
     },
     requestPanel: {
-        backgroundColor: COLORS.bgSecondary,
+        backgroundColor: COLORS.glassBg,
         borderRadius: RADIUS.xl,
         padding: SPACING.lg,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.glassBorder,
+        ...Platform.select({
+            ios: {
+                shadowColor: COLORS.neonBlue,
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+            },
+            android: { elevation: 20 },
+        }),
     },
     locationRow: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: SPACING.md,
+        padding: 10,
+        backgroundColor: COLORS.bgCard + '88',
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        borderColor: COLORS.border + '22',
     },
     locationDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        marginRight: 15,
+        width: scale(10),
+        height: scale(10),
+        borderRadius: scale(5),
+        marginRight: scale(15),
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 5,
     },
     locationInfo: {
         flex: 1,
     },
     locationLabel: {
-        fontSize: 10,
-        color: COLORS.textMuted,
+        fontSize: moderateScale(10),
+        color: COLORS.neonBlue,
         textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: 'bold',
     },
     addStopRow: {
         flexDirection: 'row',
@@ -1056,7 +1247,7 @@ const styles = StyleSheet.create({
     addStopLine: {
         width: 2,
         height: 20,
-        backgroundColor: COLORS.border,
+        backgroundColor: COLORS.neonBlue + '44',
         marginLeft: 7,
         marginRight: 15,
     },
@@ -1065,9 +1256,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 8,
         paddingHorizontal: 12,
-        backgroundColor: COLORS.bgCard,
+        backgroundColor: COLORS.neonBlue + '22',
         borderWidth: 1,
-        borderColor: COLORS.accent,
+        borderColor: COLORS.neonBlue,
         borderRadius: RADIUS.md,
     },
     addStopEmoji: {
@@ -1075,28 +1266,45 @@ const styles = StyleSheet.create({
         marginRight: 6,
     },
     addStopText: {
-        color: COLORS.accent,
-        fontWeight: '600',
+        color: COLORS.neonBlue,
+        fontWeight: 'bold',
         fontSize: 14,
     },
     locationName: {
-        fontSize: 15,
+        fontSize: moderateScale(15),
         color: COLORS.textPrimary,
         fontWeight: '500',
     },
     mapPickText: {
-        fontSize: 12,
-        color: COLORS.accent,
+        fontSize: moderateScale(12),
+        color: COLORS.neonPurple,
         fontWeight: 'bold',
+    },
+    stopActionBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: COLORS.bgCard,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: COLORS.border + '66',
+    },
+    stopActionRemove: {
+        fontSize: 14,
+    },
+    stopActionEdit: {
+        fontSize: 14,
     },
     priceSection: {
         marginVertical: SPACING.sm,
     },
     priceSectionTitle: {
-        fontSize: 14,
+        fontSize: moderateScale(14),
         fontWeight: 'bold',
-        color: COLORS.textSecondary,
-        marginBottom: 8,
+        color: COLORS.neonBlue,
+        marginBottom: scale(8),
+        textTransform: 'uppercase',
     },
     priceGrid: {
         flexDirection: 'row',
@@ -1105,17 +1313,18 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     priceSuggestion: {
-        backgroundColor: COLORS.bgCard,
-        paddingVertical: 10,
-        paddingHorizontal: 15,
+        backgroundColor: COLORS.bgCard + 'CC',
+        paddingVertical: scale(12),
+        paddingHorizontal: scale(10),
         borderRadius: RADIUS.md,
         borderWidth: 1,
         borderColor: COLORS.border,
-        minWidth: DEVICE_SIZE.LARGE ? '30%' : (DEVICE_SIZE.MEDIUM ? '45%' : '100%'),
+        flexBasis: DEVICE_SIZE.DESKTOP ? '24%' : (DEVICE_SIZE.TABLET ? '31%' : (DEVICE_SIZE.SMALL ? '95%' : '48%')),
         alignItems: 'center',
+        justifyContent: 'center',
     },
     priceText: {
-        fontSize: 14,
+        fontSize: moderateScale(14),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
     },
@@ -1124,7 +1333,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.accent + '11',
     },
     priceChipText: {
-        fontSize: 14,
+        fontSize: moderateScale(14),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
     },
@@ -1134,145 +1343,154 @@ const styles = StyleSheet.create({
     customPriceRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.bgCard,
+        backgroundColor: COLORS.bgCard + 'AA',
         borderRadius: RADIUS.md,
-        marginTop: 10,
-        paddingHorizontal: 15,
+        marginTop: scale(10),
+        paddingHorizontal: scale(15),
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.neonBlue + '44',
     },
     currencySymbol: {
-        fontSize: 20,
+        fontSize: moderateScale(20),
         fontWeight: 'bold',
-        color: COLORS.accent,
+        color: COLORS.neonGreen,
     },
     customPriceInput: {
         flex: 1,
-        fontSize: 18,
+        fontSize: moderateScale(18),
         fontWeight: 'bold',
-        color: COLORS.textPrimary,
-        paddingVertical: 10,
-        marginLeft: 5,
+        color: COLORS.neonGreen,
+        paddingVertical: scale(10),
+        marginLeft: scale(5),
     },
     paymentRow: {
         flexDirection: 'row',
-        gap: 10,
-        marginVertical: 15,
+        gap: scale(10),
+        marginVertical: scale(15),
     },
     paymentBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: COLORS.bgCard,
-        paddingVertical: 12,
+        backgroundColor: COLORS.bgCard + '88',
+        paddingVertical: scale(12),
         borderRadius: RADIUS.md,
         borderWidth: 1,
-        borderColor: COLORS.border,
-        gap: 8,
+        borderColor: COLORS.border + '44',
+        gap: scale(8),
     },
     paymentBtnActive: {
-        borderColor: COLORS.accent,
-        backgroundColor: COLORS.accent + '11',
+        borderColor: COLORS.neonPurple,
+        backgroundColor: COLORS.neonPurple + '22',
     },
-    paymentEmoji: { fontSize: 18 },
-    paymentText: { color: COLORS.textSecondary, fontWeight: '600' },
-    paymentTextActive: { color: COLORS.accent },
+    paymentEmoji: { fontSize: moderateScale(18) },
+    paymentText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: moderateScale(14) },
+    paymentTextActive: { color: COLORS.neonPurple, fontWeight: 'bold' },
     actionRow: {
         flexDirection: 'row',
         gap: 10,
     },
     cancelBtn: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: scale(50),
+        height: scale(50),
+        borderRadius: scale(25),
         backgroundColor: COLORS.bgCard,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
-    cancelBtnText: { fontSize: 20, color: COLORS.textSecondary },
+    cancelBtnText: { fontSize: moderateScale(20), color: COLORS.textSecondary },
     sendBtn: {
         flex: 1,
-        backgroundColor: COLORS.accent,
+        backgroundColor: COLORS.neonBlue,
         borderRadius: RADIUS.lg,
         justifyContent: 'center',
         alignItems: 'center',
-        height: 50,
+        height: scale(50),
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: scale(10),
+        elevation: 10,
     },
     sendBtnSearching: {
         backgroundColor: COLORS.textMuted,
     },
     sendBtnText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
     },
     menuOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
     },
     menuContent: {
-        width: width * 0.75,
+        width: DEVICE_SIZE.TABLET || DEVICE_SIZE.DESKTOP ? scale(300) : width * 0.75,
         height: '100%',
-        backgroundColor: COLORS.bgSecondary,
+        backgroundColor: COLORS.bgPrimary,
+        borderRightWidth: 1,
+        borderRightColor: COLORS.neonBlue + '44',
     },
     menuHeader: {
-        padding: 30,
+        padding: scale(30),
         backgroundColor: COLORS.bgCard,
         alignItems: 'center',
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
     userAvatarLarge: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         backgroundColor: COLORS.bgPrimary,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 15,
+        marginBottom: scale(15),
         borderWidth: 2,
         borderColor: COLORS.accent,
     },
     menuUserName: {
-        fontSize: 20,
+        fontSize: moderateScale(20),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
-        marginBottom: 5,
+        marginBottom: scale(5),
     },
     ratingBadgeContainer: {
         alignItems: 'center',
     },
     ratingPercent: {
-        fontSize: 16,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
     },
     recommendedBadge: {
         backgroundColor: COLORS.success + '22',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 5,
-        marginTop: 5,
+        paddingHorizontal: scale(10),
+        paddingVertical: scale(4),
+        borderRadius: scale(5),
+        marginTop: scale(5),
         borderWidth: 1,
         borderColor: COLORS.success,
     },
     recommendedText: {
         color: COLORS.success,
-        fontSize: 12,
+        fontSize: moderateScale(12),
         fontWeight: 'bold',
     },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 20,
+        padding: scale(20),
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border + '11',
     },
-    menuItemIcon: { fontSize: 20, marginRight: 15 },
-    menuItemText: { fontSize: 16, color: COLORS.textPrimary, fontWeight: '500' },
+    menuItemIcon: { fontSize: moderateScale(20), marginRight: scale(15) },
+    menuItemText: { fontSize: moderateScale(16), color: COLORS.textPrimary, fontWeight: '500' },
     searchingOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.8)',
@@ -1284,28 +1502,49 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.bgSecondary,
         width: width * 0.85,
         borderRadius: RADIUS.xl,
-        padding: 30,
+        padding: scale(30),
         alignItems: 'center',
     },
     searchingPulse: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         backgroundColor: COLORS.accent + '22',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: scale(20),
     },
-    searchingEmoji: { fontSize: 40 },
-    searchingTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 10 },
-    searchingSub: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', marginBottom: 30 },
+    searchingEmoji: { fontSize: moderateScale(40) },
+    searchingTitle: { fontSize: moderateScale(22), fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: scale(10) },
+    resultAddress: { fontSize: moderateScale(11), color: COLORS.textMuted },
+
+    currentLocResult: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: scale(SPACING.md),
+        backgroundColor: COLORS.neonBlue + '15',
+        borderRadius: RADIUS.md,
+        borderWidth: 1,
+        borderColor: COLORS.neonBlue + '30',
+        gap: scale(12),
+    },
+    currentLocTitle: {
+        fontSize: moderateScale(14),
+        fontWeight: '700',
+        color: COLORS.neonBlue,
+    },
+    currentLocSubtitle: {
+        fontSize: moderateScale(11),
+        color: COLORS.textMuted,
+    },
+    searchingSub: { fontSize: moderateScale(14), color: COLORS.textMuted, textAlign: 'center', marginBottom: scale(30) },
     searchingProgressContainer: {
         width: '100%',
-        height: 4,
+        height: scale(4),
         backgroundColor: COLORS.border,
-        borderRadius: 2,
+        borderRadius: scale(2),
         overflow: 'hidden',
-        marginVertical: 20,
+        marginVertical: scale(20),
     },
     searchingProgressBar: {
         width: '40%',
@@ -1314,94 +1553,94 @@ const styles = StyleSheet.create({
         borderRadius: 2,
     },
     cancelRequestBtn: {
-        paddingVertical: 12,
-        paddingHorizontal: 25,
+        paddingVertical: scale(12),
+        paddingHorizontal: scale(25),
         borderRadius: RADIUS.md,
         borderWidth: 1,
         borderColor: COLORS.border,
     },
-    cancelRequestText: { color: COLORS.error, fontWeight: 'bold' },
+    cancelRequestText: { color: COLORS.error, fontWeight: 'bold', fontSize: moderateScale(14) },
     mapPickerContainer: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    crosshairVertical: { width: 1, height: 40, backgroundColor: COLORS.accent, position: 'absolute' },
-    crosshairHorizontal: { width: 40, height: 1, backgroundColor: COLORS.accent, position: 'absolute' },
-    fixedPin: { marginBottom: 40 },
-    fixedPinIcon: { fontSize: 40 },
+    crosshairVertical: { width: 1, height: scale(40), backgroundColor: COLORS.accent, position: 'absolute' },
+    crosshairHorizontal: { width: scale(40), height: 1, backgroundColor: COLORS.accent, position: 'absolute' },
+    fixedPin: { marginBottom: scale(40) },
+    fixedPinIcon: { fontSize: moderateScale(40) },
     pinPulse: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
+        width: scale(20),
+        height: scale(20),
+        borderRadius: scale(10),
         backgroundColor: COLORS.accent + '44',
         position: 'absolute',
-        bottom: -10,
-        left: 10,
+        bottom: scale(-10),
+        left: scale(10),
     },
     pickerMetricsBox: {
         position: 'absolute',
-        top: 100,
+        top: scale(100),
         flexDirection: 'row',
         backgroundColor: COLORS.bgCard,
-        padding: 15,
+        padding: scale(15),
         borderRadius: RADIUS.lg,
         borderWidth: 1,
         borderColor: COLORS.accent,
         alignItems: 'center',
     },
-    metricItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    metricEmoji: { fontSize: 14 },
-    metricDivider: { width: 1, height: 20, backgroundColor: COLORS.border, marginHorizontal: 15 },
+    metricItem: { flexDirection: 'row', alignItems: 'center', gap: scale(5) },
+    metricEmoji: { fontSize: moderateScale(14) },
+    metricDivider: { width: 1, height: scale(20), backgroundColor: COLORS.border, marginHorizontal: scale(15) },
     confirmMapPicker: {
         position: 'absolute',
-        bottom: 50,
-        left: 20,
-        right: 20,
+        bottom: scale(50),
+        left: scale(20),
+        right: scale(20),
         backgroundColor: COLORS.accent,
-        padding: 15,
+        padding: scale(15),
         borderRadius: RADIUS.lg,
         alignItems: 'center',
         ...Platform.select({
             ios: {
                 shadowColor: COLORS.accent,
-                shadowOffset: { width: 0, height: 6 },
+                shadowOffset: { width: 0, height: scale(6) },
                 shadowOpacity: 0.4,
-                shadowRadius: 8,
+                shadowRadius: scale(8),
             },
             android: { elevation: 12 },
         }),
     },
-    confirmMapPickerText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+    confirmMapPickerText: { color: '#fff', fontSize: moderateScale(18), fontWeight: 'bold' },
 
     // Professional Map Controls
     mapControls: {
         position: 'absolute',
-        right: 15,
-        top: '30%',
+        right: scale(15),
+        top: '35%', // Adjusted to avoid search bar overlap
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.lg,
-        padding: 5,
+        padding: scale(5),
         borderWidth: 1,
         borderColor: COLORS.border,
         ...Platform.select({
             ios: {
                 shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
+                shadowOffset: { width: 0, height: scale(4) },
                 shadowOpacity: 0.3,
-                shadowRadius: 5,
+                shadowRadius: scale(5),
             },
             android: { elevation: 10 },
         }),
     },
     mapControlButton: {
-        width: 44,
-        height: 44,
+        width: scale(44),
+        height: scale(44),
         justifyContent: 'center',
         alignItems: 'center',
     },
     mapControlText: {
-        fontSize: 24,
+        fontSize: moderateScale(24),
         color: COLORS.textPrimary,
         fontWeight: '300',
     },

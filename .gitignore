@@ -43,3 +43,4 @@ yarn-error.*
 # Secrets
 src/config/secrets.js
 .env*
+src/scripts/migration/*.json

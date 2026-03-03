@@ -7,32 +7,57 @@ import { CARTO_DARK_TILES } from './RiderDashboard';
 import { db } from '../../lib/firebase';
 import { doc, onSnapshot, updateDoc, increment } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
+import { scale, moderateScale, SAFE_TOP, SAFE_BOTTOM } from '../../theme/responsive';
 import RatingModal from '../../components/RatingModal';
-
-// Dark map style removed as CARTO_DARK_TILES will be used in WebViewLeaflet
+import { getRoute } from '../../lib/geo';
 
 export default function RideTracking({ route, navigation }) {
     const { rideId, driverId } = route.params;
     const mapRef = useRef(null);
-
     const [ride, setRide] = useState(null);
     const [driverLocation, setDriverLocation] = useState(null);
     const [driverInfo, setDriverInfo] = useState(null);
     const [showRatingModal, setShowRatingModal] = useState(false);
+    const [routeCoords, setRouteCoords] = useState([]);
+    const [eta, setEta] = useState(null);
 
     // Listen for ride updates
     useEffect(() => {
-        const unsubscribe = onSnapshot(doc(db, 'rides', rideId), (docSnap) => {
+        const unsubscribe = onSnapshot(doc(db, 'rides', rideId), async (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setRide(data);
+
+                // Fetch route if not yet fetched
+                if (data.pickup && (data.dropoff || data.dropoffs?.length > 0) && routeCoords.length === 0) {
+                    const points = [
+                        { latitude: data.pickup.latitude, longitude: data.pickup.longitude },
+                        ...(data.dropoffs || [])
+                    ].filter(p => p && p.latitude);
+
+                    if (!data.dropoffs && data.dropoff) {
+                        points.push({ latitude: data.dropoff.latitude, longitude: data.dropoff.longitude });
+                    }
+
+                    if (points.length >= 2) {
+                        try {
+                            const route = await getRoute(points);
+                            if (route && route.coordinates) {
+                                setRouteCoords(route.coordinates);
+                            }
+                        } catch (e) {
+                            console.error("Failed to fetch route for tracking", e);
+                        }
+                    }
+                }
+
                 if (data.status === 'completed' && !showRatingModal) {
                     setShowRatingModal(true);
                 }
             }
         });
         return unsubscribe;
-    }, [rideId, showRatingModal]);
+    }, [rideId, showRatingModal, routeCoords.length]);
 
     const handleFinishRating = async (rating) => {
         try {
@@ -70,6 +95,38 @@ export default function RideTracking({ route, navigation }) {
         return unsubscribe;
     }, [driverId]);
 
+    // Calculate ETA
+    useEffect(() => {
+        if (!driverLocation || !ride) return;
+
+        const calculateETA = async () => {
+            try {
+                let targetLoc;
+                if (ride.status === 'accepted' || ride.status === 'arriving') {
+                    targetLoc = ride.pickup;
+                } else if (ride.status === 'in_progress') {
+                    const dropoffsArray = ride.dropoffs || [];
+                    targetLoc = dropoffsArray.length > 0 ? dropoffsArray[dropoffsArray.length - 1] : ride.dropoff;
+                }
+
+                if (targetLoc && targetLoc.latitude) {
+                    const route = await getRoute([
+                        { latitude: driverLocation.latitude, longitude: driverLocation.longitude },
+                        { latitude: targetLoc.latitude, longitude: targetLoc.longitude }
+                    ]);
+                    if (route) {
+                        setEta(Math.ceil(route.duration));
+                    }
+                }
+            } catch (err) {
+                console.error("ETA Calculation Error:", err);
+            }
+        };
+
+        const timer = setTimeout(calculateETA, 2000); // Debounce to avoid excessive API calls
+        return () => clearTimeout(timer);
+    }, [driverLocation, ride?.status]);
+
     const getStatusLabel = () => {
         switch (ride?.status) {
             case 'accepted': return { text: 'Chofer en camino', color: COLORS.info, icon: '🚗' };
@@ -102,7 +159,6 @@ export default function RideTracking({ route, navigation }) {
                             lat: ride.pickup.latitude,
                             lng: ride.pickup.longitude
                         }}
-                        zoom={16}
                         mapMarkers={[
                             ...(driverLocation ? [{
                                 id: 'driver-loc',
@@ -113,16 +169,34 @@ export default function RideTracking({ route, navigation }) {
                             ...(ride?.pickup ? [{
                                 id: 'pickup-loc',
                                 position: { lat: ride.pickup.latitude, lng: ride.pickup.longitude },
-                                icon: '🟢',
+                                icon: '📍 A',
                                 size: [28, 28],
                             }] : []),
-                            ...(ride?.dropoff ? [{
-                                id: 'dropoff-loc',
-                                position: { lat: ride.dropoff.latitude, lng: ride.dropoff.longitude },
-                                icon: '🔴',
-                                size: [28, 28],
-                            }] : [])
+                            ...((ride?.dropoffs || []).slice(0, -1).map((stop, idx) => ({
+                                id: `stop-${idx}`,
+                                position: { lat: stop.latitude, lng: stop.longitude },
+                                icon: `📍 ${String.fromCharCode(66 + idx)}`,
+                                size: [24, 24],
+                            }))),
+                            ...(() => {
+                                const dropoffsArray = ride?.dropoffs || [];
+                                const finalDest = dropoffsArray.length > 0 ? dropoffsArray[dropoffsArray.length - 1] : ride?.dropoff;
+                                return finalDest ? [{
+                                    id: 'dropoff-loc',
+                                    position: { lat: finalDest.latitude, lng: finalDest.longitude },
+                                    icon: `📍 ${String.fromCharCode(66 + Math.max(0, dropoffsArray.length - 1))}`,
+                                    size: [28, 28],
+                                }] : [];
+                            })()
                         ]}
+                        mapShapes={routeCoords.length > 0 ? [{
+                            shapeType: 'Polyline',
+                            color: COLORS.accent,
+                            id: 'route-line',
+                            positions: routeCoords,
+                            weight: 5,
+                            opacity: 0.8
+                        }] : []}
                     />
                 </View>
             )}
@@ -140,14 +214,16 @@ export default function RideTracking({ route, navigation }) {
                 {/* Status indicator */}
                 <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>
                     <Text style={styles.statusIcon}>{status.icon}</Text>
-                    <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+                    <Text style={[styles.statusText, { color: status.color }]}>
+                        {status.text} {eta ? `(${eta} min)` : ''}
+                    </Text>
                 </View>
 
                 {/* Driver info */}
                 {driverInfo && (
                     <View style={styles.driverInfoRow}>
                         <View style={styles.driverAvatar}>
-                            <Text style={{ fontSize: 28 }}>👤</Text>
+                            <Text style={{ fontSize: moderateScale(28) }}>👤</Text>
                         </View>
                         <View style={styles.driverDetails}>
                             <Text style={styles.driverName}>{ride?.driverName || 'Chofer'}</Text>
@@ -197,19 +273,19 @@ const styles = StyleSheet.create({
     dropoffPin: {},
     backBtn: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 50 : 40,
-        left: SPACING.md,
+        top: SAFE_TOP,
+        left: scale(SPACING.md),
         backgroundColor: COLORS.bgOverlay,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: scale(44),
+        height: scale(44),
+        borderRadius: scale(22),
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     backBtnText: {
-        fontSize: 22,
+        fontSize: moderateScale(22),
         color: COLORS.textPrimary,
     },
     bottomCard: {
@@ -220,8 +296,8 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.bgSecondary,
         borderTopLeftRadius: RADIUS.xl,
         borderTopRightRadius: RADIUS.xl,
-        padding: SPACING.lg,
-        paddingBottom: Platform.OS === 'ios' ? 40 : SPACING.lg,
+        padding: scale(SPACING.lg),
+        paddingBottom: SAFE_BOTTOM + scale(SPACING.md),
         borderTopWidth: 1,
         borderColor: COLORS.border,
     },
@@ -229,29 +305,29 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'center',
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.sm,
+        paddingHorizontal: scale(SPACING.md),
+        paddingVertical: scale(SPACING.sm),
         borderRadius: RADIUS.full,
-        marginBottom: SPACING.md,
-        gap: SPACING.xs,
+        marginBottom: scale(SPACING.md),
+        gap: scale(SPACING.xs),
     },
     statusIcon: {
-        fontSize: 16,
+        fontSize: moderateScale(16),
     },
     statusText: {
-        fontSize: FONTS.sizes.md,
+        fontSize: moderateScale(FONTS.sizes.md),
         fontWeight: '700',
     },
     driverInfoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: SPACING.md,
-        gap: SPACING.md,
+        marginBottom: scale(SPACING.md),
+        gap: scale(SPACING.md),
     },
     driverAvatar: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: scale(56),
+        height: scale(56),
+        borderRadius: scale(28),
         backgroundColor: COLORS.bgCard,
         justifyContent: 'center',
         alignItems: 'center',
@@ -262,35 +338,35 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     driverName: {
-        fontSize: FONTS.sizes.lg,
+        fontSize: moderateScale(FONTS.sizes.lg),
         fontWeight: '700',
         color: COLORS.textPrimary,
     },
     vehicleInfo: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(FONTS.sizes.sm),
         color: COLORS.textSecondary,
-        marginTop: 2,
+        marginTop: scale(2),
     },
     plateText: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(FONTS.sizes.sm),
         fontWeight: '700',
         color: COLORS.accent,
-        marginTop: 2,
+        marginTop: scale(2),
     },
     priceTag: {
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.md,
-        padding: SPACING.sm,
+        padding: scale(SPACING.sm),
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     priceLabel: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(FONTS.sizes.xs),
         color: COLORS.textMuted,
     },
     priceValue: {
-        fontSize: FONTS.sizes.lg,
+        fontSize: moderateScale(FONTS.sizes.lg),
         fontWeight: '800',
         color: COLORS.accent,
     },
@@ -299,14 +375,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.md,
-        padding: SPACING.md,
-        gap: SPACING.sm,
+        padding: scale(SPACING.md),
+        gap: scale(SPACING.sm),
     },
     paymentIcon: {
-        fontSize: 20,
+        fontSize: moderateScale(20),
     },
     paymentText: {
-        fontSize: FONTS.sizes.md,
+        fontSize: moderateScale(FONTS.sizes.md),
         color: COLORS.textSecondary,
         fontWeight: '500',
     },

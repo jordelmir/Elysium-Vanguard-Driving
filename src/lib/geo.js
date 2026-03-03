@@ -1,4 +1,4 @@
-// Geolocation utilities for Elysium Vanguard Driving
+// Elysium Vanguard Driving - Geolocation utilities
 import * as Location from 'expo-location';
 
 /**
@@ -15,7 +15,6 @@ export async function getCurrentLocation() {
         throw new Error('Permiso de ubicación denegado');
     }
 
-    // Get position with highest accuracy
     const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.BestForNavigation,
     });
@@ -30,8 +29,6 @@ export async function getCurrentLocation() {
 
 /**
  * Start watching location with continuous updates
- * @param {Function} callback - receives { latitude, longitude, heading, speed }
- * @returns {Object} subscription - call .remove() to stop watching
  */
 export async function watchLocation(callback) {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -42,8 +39,8 @@ export async function watchLocation(callback) {
     const subscription = await Location.watchPositionAsync(
         {
             accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 1, // Update every 1 meter for maximum precision
-            timeInterval: 2000,   // Update every 2 seconds
+            distanceInterval: 1,
+            timeInterval: 2000,
         },
         (location) => {
             callback({
@@ -63,7 +60,7 @@ export async function watchLocation(callback) {
  * @returns distance in kilometers
  */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Earth radius in km
+    const R = 6371;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =
@@ -79,37 +76,121 @@ function toRad(deg) {
 }
 
 /**
- * Search for places using OpenStreetMap Nominatim API
- * @param {string} query - The search query
- * @returns {Promise<Array>} List of matching places
+ * ENHANCED Search for places - uses Photon (by Komoot) as primary & Nominatim as fallback.
+ * Photon uses OpenStreetMap data but has much better fuzzy matching / autocomplete.
  */
 export async function searchPlaces(query, lat, lon) {
-    if (!query || query.length < 3) return [];
+    if (!query || query.length < 2) return [];
 
     try {
-        // Use a broader limit and prioritize Costa Rica with viewbox and countrycodes
-        // viewbox: [min_lon, max_lat, max_lon, min_lat] for Costa Rica
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=15&addressdetails=1&countrycodes=cr&viewbox=-85.95,11.22,-82.55,8.03&bounded=1`;
+        // ---- Strategy 1: Photon API (better fuzzy / autocomplete) ----
+        let photonResults = [];
+        try {
+            let photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=12&lang=es`;
+            if (lat && lon) {
+                photonUrl += `&lat=${lat}&lon=${lon}`;
+            }
+            const photonRes = await fetch(photonUrl, {
+                headers: { 'User-Agent': 'ElysiumVanguardDriving/1.0' },
+            });
+            const photonData = await photonRes.json();
 
-        if (lat && lon) {
-            url += `&lat=${lat}&lon=${lon}`;
+            if (photonData?.features?.length > 0) {
+                photonResults = photonData.features
+                    .filter(f => {
+                        // Prefer results in Costa Rica or nearby
+                        const cc = f.properties?.countrycode;
+                        return !cc || cc === 'CR' || cc === 'cr';
+                    })
+                    .map((f) => {
+                        const props = f.properties || {};
+                        const coords = f.geometry?.coordinates || [];
+                        const shortName = props.name || props.street || query;
+                        const addressParts = [
+                            props.street,
+                            props.housenumber,
+                            props.city || props.locality,
+                            props.state,
+                            props.country,
+                        ].filter(Boolean);
+
+                        return {
+                            id: `photon-${coords[0]}-${coords[1]}`,
+                            name: addressParts.join(', ') || shortName,
+                            shortName: shortName,
+                            latitude: coords[1],
+                            longitude: coords[0],
+                            address: addressParts.join(', ') || shortName,
+                            type: props.osm_value || props.type || 'place',
+                            source: 'photon',
+                        };
+                    });
+            }
+        } catch (photonErr) {
+            console.warn('Photon search failed, falling back to Nominatim:', photonErr);
         }
 
-        const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'ElysiumVanguardDriving/1.0',
-            },
-        });
-        const data = await response.json();
+        // ---- Strategy 2: Nominatim (structured + detailed) ----
+        let nominatimResults = [];
+        try {
+            let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=15&addressdetails=1&extratags=1&namedetails=1&countrycodes=cr&viewbox=-85.95,11.22,-82.55,8.03&bounded=0&dedupe=1`;
+            if (lat && lon) {
+                url += `&lat=${lat}&lon=${lon}`;
+            }
 
-        return data.map((item) => ({
-            id: item.place_id,
-            name: item.display_name,
-            shortName: item.name || (item.display_name.split(',')[0]),
-            latitude: parseFloat(item.lat),
-            longitude: parseFloat(item.lon),
-            address: item.display_name,
-        }));
+            const response = await fetch(url, {
+                headers: { 'User-Agent': 'ElysiumVanguardDriving/1.0' },
+            });
+            const data = await response.json();
+
+            nominatimResults = data.map((item) => {
+                const name = item.namedetails?.name || item.name || item.display_name.split(',')[0];
+                return {
+                    id: `nom-${item.place_id}`,
+                    name: item.display_name,
+                    shortName: name,
+                    latitude: parseFloat(item.lat),
+                    longitude: parseFloat(item.lon),
+                    address: item.display_name,
+                    type: item.type,
+                    source: 'nominatim',
+                };
+            });
+        } catch (nomErr) {
+            console.warn('Nominatim search failed:', nomErr);
+        }
+
+        // ---- Merge & Deduplicate ----
+        const seen = new Set();
+        const merged = [];
+
+        // Photon results first (better fuzzy matching)
+        for (const r of photonResults) {
+            const key = `${r.latitude?.toFixed(4)},${r.longitude?.toFixed(4)}`;
+            if (!seen.has(key) && r.latitude && r.longitude) {
+                seen.add(key);
+                merged.push(r);
+            }
+        }
+        // Then Nominatim
+        for (const r of nominatimResults) {
+            const key = `${r.latitude?.toFixed(4)},${r.longitude?.toFixed(4)}`;
+            if (!seen.has(key) && r.latitude && r.longitude) {
+                seen.add(key);
+                merged.push(r);
+            }
+        }
+
+        // Sort by distance if user location is available
+        if (lat && lon) {
+            merged.sort((a, b) => {
+                const distA = calculateDistance(lat, lon, a.latitude, a.longitude);
+                const distB = calculateDistance(lat, lon, b.latitude, b.longitude);
+                return distA - distB;
+            });
+        }
+
+        return merged.slice(0, 20);
     } catch (error) {
         console.error('Error searching places:', error);
         return [];
@@ -123,9 +204,7 @@ export async function getPlaceDetails(latitude, longitude) {
     try {
         const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`;
         const response = await fetch(url, {
-            headers: {
-                'User-Agent': 'ElysiumVanguardDriving/1.0',
-            },
+            headers: { 'User-Agent': 'ElysiumVanguardDriving/1.0' },
         });
         const data = await response.json();
 
@@ -138,7 +217,6 @@ export async function getPlaceDetails(latitude, longitude) {
             };
         }
 
-        // Fallback to coordinates
         return {
             name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
             address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
@@ -157,7 +235,7 @@ export async function getPlaceDetails(latitude, longitude) {
 }
 
 /**
- * Reverse geocode coordinates to address (Legacy fallback using Expo)
+ * Reverse geocode coordinates to address
  */
 export async function reverseGeocode(latitude, longitude) {
     try {
@@ -177,16 +255,14 @@ export async function reverseGeocode(latitude, longitude) {
         return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
     }
 }
+
 /**
  * Get route passing through multiple points using OSRM
- * @param {Array<{latitude: number, longitude: number}>} points - Array of coordinates to pass through
- * @returns {Promise<Object>} { coordinates, distance, duration }
  */
 export async function getRoute(points) {
     try {
         if (!points || points.length < 2) return null;
 
-        // Format for OSRM: lon,lat;lon,lat;...
         const coordinatesString = points
             .map(p => `${p.longitude},${p.latitude}`)
             .join(';');
@@ -202,8 +278,8 @@ export async function getRoute(points) {
                     lat: coord[1],
                     lng: coord[0]
                 })),
-                distance: route.distance / 1000, // km
-                duration: route.duration / 60,   // min
+                distance: route.distance / 1000,
+                duration: route.duration / 60,
             };
         }
         return null;

@@ -7,11 +7,22 @@ export const COLORS = {
   bgCardHover: '#242d3d',
   bgOverlay: 'rgba(13, 17, 23, 0.85)',
 
-  // Accent - Orange (InDriver style)
-  accent: '#ff6b35',
-  accentLight: '#ff8c5a',
-  accentDark: '#e55a28',
-  accentGlow: 'rgba(255, 107, 53, 0.3)',
+  accent: '#00f2ff', // Neon Cyan
+  accentLight: '#70f9ff',
+  accentDark: '#00c2cc',
+  accentGlow: 'rgba(0, 242, 255, 0.4)',
+
+  // Neon Palette
+  neonBlue: '#00f2ff',
+  neonGreen: '#39ff14',
+  neonPurple: '#bc13fe',
+  neonPink: '#ff007f',
+  neonYellow: '#ccff00',
+
+  // Glassmorphism
+  glassBg: 'rgba(255, 255, 255, 0.1)',
+  glassBorder: 'rgba(255, 255, 255, 0.2)',
+  glassBgDark: 'rgba(0, 0, 0, 0.4)',
 
   // Text
   textPrimary: '#f0f6fc',
@@ -20,20 +31,20 @@ export const COLORS = {
   textAccent: '#ff6b35',
 
   // Semantic
-  success: '#3fb950',
-  successBg: 'rgba(63, 185, 80, 0.15)',
-  error: '#f85149',
-  errorBg: 'rgba(248, 81, 73, 0.15)',
-  warning: '#d29922',
-  warningBg: 'rgba(210, 153, 34, 0.15)',
-  info: '#58a6ff',
-  infoBg: 'rgba(88, 166, 255, 0.15)',
+  success: '#39ff14', // Neon Green
+  successBg: 'rgba(57, 255, 20, 0.15)',
+  error: '#ff0033',
+  errorBg: 'rgba(255, 0, 51, 0.15)',
+  warning: '#ccff00',
+  warningBg: 'rgba(204, 255, 0, 0.15)',
+  info: '#00f2ff',
+  infoBg: 'rgba(0, 242, 255, 0.15)',
 
   // Map
-  mapRoute: '#ff6b35',
-  mapPickup: '#3fb950',
-  mapDropoff: '#f85149',
-  mapDriver: '#58a6ff',
+  mapRoute: '#00f2ff',
+  mapPickup: '#39ff14',
+  mapDropoff: '#ff0033',
+  mapDriver: '#bc13fe',
 
   // Borders
   border: '#30363d',

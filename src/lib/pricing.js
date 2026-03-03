@@ -1,34 +1,29 @@
 // Pricing engine for Elysium Vanguard Driving
 // Costa Rica Colones (₡)
 
-const BASE_FARE = 0;      // ₡500 tarifa base
+const BASE_FARE = 0;        // ₡0 tarifa base (as requested)
 const PER_KM = 300;         // ₡300 por kilómetro
 const PER_MINUTE = 60;      // ₡60 por minuto estimado
 const MIN_FARE = 1000;      // ₡1,000 tarifa mínima
-const COMMISSION_RATE = 0.01; // 1% comisión de la plataforma
+const COMMISSION_RATE = 0.01; // 1% comisión (as requested)
 
 export function calculateSuggestedPrice(distanceKm, durationMinutes = null) {
-    // If real duration is provided, use it. Otherwise estimate: average 30km/h in city → minutes = (distance / 30) * 60
-    const estimatedMinutes = durationMinutes !== null ? Math.max(2, Math.round(durationMinutes)) : Math.max(2, Math.round((distanceKm / 30) * 60));
+    // Si no mandan duración real, estimamos 30km/h en ciudad
+    const estimatedMinutes = durationMinutes !== null
+        ? Math.max(2, Math.round(durationMinutes))
+        : Math.max(2, Math.round((distanceKm / 30) * 60));
 
-    // Determine traffic multiplier based on time of day
-    // Peak hours: 7-9 AM, 5-7 PM
-    const now = new Date();
-    const hour = now.getHours();
-    let trafficMultiplier = 1.0;
-
-    if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
-        trafficMultiplier = 1.3; // 30% increase during peak hours
-    } else if (hour >= 22 || hour <= 5) {
-        trafficMultiplier = 1.2; // 20% increase for night service
-    }
-
+    // Simple calculation: Distance + Time (exact 300/km + 60/min)
     const distanceCost = Math.round((distanceKm || 0) * PER_KM);
     const timeCost = Math.round(estimatedMinutes * PER_MINUTE);
-    const subtotal = (BASE_FARE + distanceCost + timeCost) * trafficMultiplier;
+
+    // Total subtotal
+    const subtotal = BASE_FARE + distanceCost + timeCost;
+
+    // Math.max guarantees it never goes below MIN_FARE, Number.isNaN ensures safe fallback
     const total = Number.isNaN(subtotal) ? MIN_FARE : Math.max(subtotal, MIN_FARE);
 
-    // Round to nearest 100 colones
+    // Redondear a la centena más cercana (ej: 1450 -> 1500)
     const roundedTotal = Math.round(total / 100) * 100;
 
     return {
@@ -38,7 +33,7 @@ export function calculateSuggestedPrice(distanceKm, durationMinutes = null) {
         distanceKm: Math.round((distanceKm || 0) * 10) / 10,
         estimatedMinutes,
         suggestedPrice: roundedTotal || MIN_FARE,
-        trafficMultiplier: trafficMultiplier > 1 ? `${Math.round((trafficMultiplier - 1) * 100)}% extra` : null
+        trafficMultiplier: null // Removed extra traffic multipliers for predictable flat pricing
     };
 }
 

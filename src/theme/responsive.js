@@ -1,4 +1,4 @@
-import { Dimensions, Platform, PixelRatio } from 'react-native';
+import { Dimensions, Platform, PixelRatio, StatusBar } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -25,13 +25,21 @@ const verticalScale = (size) => (SCREEN_HEIGHT / guidelineBaseHeight) * size;
 const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
 
 /**
- * Device size classification
+ * Device size classification - Refined for better precision
  */
 const DEVICE_SIZE = {
     SMALL: SCREEN_WIDTH < 360,
-    MEDIUM: SCREEN_WIDTH >= 360 && SCREEN_WIDTH < 600,
-    LARGE: SCREEN_WIDTH >= 600,
+    MEDIUM: SCREEN_WIDTH >= 360 && SCREEN_WIDTH < 414, // iPhone 11/12/13/14 standard
+    LARGE: SCREEN_WIDTH >= 414 && SCREEN_WIDTH < 768, // Max/Plus models
+    TABLET: SCREEN_WIDTH >= 768 && SCREEN_WIDTH < 1024,
+    DESKTOP: SCREEN_WIDTH >= 1024,
 };
+
+/**
+ * Safe area helpers for common UI elements
+ */
+const SAFE_TOP = Platform.OS === 'ios' ? (SCREEN_HEIGHT > 800 ? 55 : 30) : StatusBar.currentHeight || 24;
+const SAFE_BOTTOM = Platform.OS === 'ios' ? (SCREEN_HEIGHT > 800 ? 34 : 15) : 15;
 
 /**
  * Grid-like utilities
@@ -50,4 +58,6 @@ export {
     SCREEN_HEIGHT,
     DEVICE_SIZE,
     getGridColumns,
+    SAFE_TOP,
+    SAFE_BOTTOM,
 };

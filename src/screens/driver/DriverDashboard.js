@@ -14,6 +14,8 @@ import {
 } from 'firebase/firestore';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
 
+import { scale, moderateScale, SCREEN_WIDTH, DEVICE_SIZE, SAFE_TOP, SAFE_BOTTOM } from '../../theme/responsive';
+
 const { width } = Dimensions.get('window');
 
 // Dark map style removed as CARTO_DARK_TILES will be used in WebViewLeaflet
@@ -28,6 +30,27 @@ export default function DriverDashboard({ navigation }) {
     const [rideRequests, setRideRequests] = useState([]);
     const [todayEarnings, setTodayEarnings] = useState(0);
     const [showMenu, setShowMenu] = useState(false);
+    const breatheAnim = useRef(new Animated.Value(0.6)).current;
+
+    // Breathing animation for online status
+    useEffect(() => {
+        const animation = Animated.loop(
+            Animated.sequence([
+                Animated.timing(breatheAnim, {
+                    toValue: 1,
+                    duration: 1500,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(breatheAnim, {
+                    toValue: 0.6,
+                    duration: 1500,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        animation.start();
+        return () => animation.stop();
+    }, []);
 
     // Pulse animation for connect button
     useEffect(() => {
@@ -310,23 +333,51 @@ export default function DriverDashboard({ navigation }) {
                 </View>
             )}
 
-            {/* Top bar */}
-            <View style={styles.topBar}>
-                <TouchableOpacity style={styles.menuBtn} onPress={() => setShowMenu(!showMenu)}>
-                    <Text style={styles.menuIcon}>☰</Text>
-                </TouchableOpacity>
+            {/* Header & Stats */}
+            <View style={styles.headerAbsolute}>
+                <View style={styles.topBar}>
+                    <TouchableOpacity style={styles.menuBtn} onPress={() => setShowMenu(!showMenu)}>
+                        <Text style={styles.menuIcon}>☰</Text>
+                    </TouchableOpacity>
 
-                <View style={styles.earningsBadge}>
-                    <Text style={styles.earningsAmount}>₡{todayEarnings.toLocaleString()}</Text>
-                    <Text style={styles.earningsLabel}>Hoy</Text>
+                    {isOnline && (
+                        <Animated.View style={[styles.onlineBadge, { opacity: breatheAnim }]}>
+                            <View style={styles.onlineDot} />
+                            <Text style={styles.onlineText}>En línea</Text>
+                        </Animated.View>
+                    )}
                 </View>
 
-                {isOnline && (
-                    <View style={styles.onlineBadge}>
-                        <View style={styles.onlineDot} />
-                        <Text style={styles.onlineText}>En línea</Text>
+                <View style={styles.statsGrid}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statEmoji}>💰</Text>
+                        <View>
+                            <Text style={styles.statValue}>₡{todayEarnings.toLocaleString()}</Text>
+                            <Text style={styles.statLabel}>Hoy</Text>
+                        </View>
                     </View>
-                )}
+                    <View style={styles.statItem}>
+                        <Text style={styles.statEmoji}>📋</Text>
+                        <View>
+                            <Text style={styles.statValue}>{userData?.totalRides || 0}</Text>
+                            <Text style={styles.statLabel}>Viajes</Text>
+                        </View>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statEmoji}>⭐</Text>
+                        <View>
+                            <Text style={styles.statValue}>{calculateRatingPercentage(userData?.ratingSum, userData?.ratingCount)}%</Text>
+                            <Text style={styles.statLabel}>Ranking</Text>
+                        </View>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statEmoji}>💎</Text>
+                        <View>
+                            <Text style={styles.statValue}>1%</Text>
+                            <Text style={styles.statLabel}>Comisión</Text>
+                        </View>
+                    </View>
+                </View>
             </View>
 
             {/* Ride requests list */}
@@ -373,10 +424,6 @@ export default function DriverDashboard({ navigation }) {
                             </Text>
                         </TouchableOpacity>
                     </Animated.View>
-
-                    <TouchableOpacity style={styles.settingsBtn} onPress={logout}>
-                        <Text style={{ fontSize: 22 }}>🚪</Text>
-                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -447,107 +494,126 @@ const styles = StyleSheet.create({
     map: {
         ...StyleSheet.absoluteFillObject,
     },
-    topBar: {
+    headerAbsolute: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 50 : 40,
-        left: SPACING.md,
-        right: SPACING.md,
+        top: SAFE_TOP + scale(5),
+        left: scale(SPACING.md),
+        right: scale(SPACING.md),
+        zIndex: 10,
+    },
+    topBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        marginBottom: scale(SPACING.sm),
     },
     menuBtn: {
-        backgroundColor: COLORS.bgOverlay,
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        backgroundColor: COLORS.glassBgDark,
+        width: scale(44),
+        height: scale(44),
+        borderRadius: RADIUS.md,
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.glassBorder,
     },
     menuIcon: {
-        fontSize: 20,
-        color: COLORS.textPrimary,
+        fontSize: moderateScale(22),
+        color: COLORS.neonBlue,
+        textShadowColor: COLORS.neonBlue,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: scale(10),
     },
-    earningsBadge: {
-        backgroundColor: COLORS.bgOverlay,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.sm,
-        borderRadius: RADIUS.full,
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: scale(SPACING.xs),
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        padding: scale(SPACING.xs),
+        borderRadius: RADIUS.lg,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.glassBorder,
+    },
+    statItem: {
+        width: '48%',
+        flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: COLORS.glassBgDark,
+        padding: scale(SPACING.sm),
+        borderRadius: RADIUS.md,
+        gap: scale(SPACING.sm),
     },
-    earningsAmount: {
-        fontSize: FONTS.sizes.lg,
+    statEmoji: { fontSize: moderateScale(16) },
+    statValue: {
+        fontSize: moderateScale(14),
         fontWeight: '800',
-        color: COLORS.accent,
+        color: COLORS.neonBlue,
     },
-    earningsLabel: {
-        fontSize: FONTS.sizes.xs,
+    statLabel: {
+        fontSize: moderateScale(9),
         color: COLORS.textMuted,
+        textTransform: 'uppercase',
     },
     onlineBadge: {
         backgroundColor: COLORS.successBg,
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: 6,
+        paddingHorizontal: scale(SPACING.sm),
+        paddingVertical: scale(6),
         borderRadius: RADIUS.full,
-        gap: 4,
+        gap: scale(6),
         borderWidth: 1,
-        borderColor: 'rgba(63, 185, 80, 0.3)',
+        borderColor: COLORS.success + '40',
     },
     onlineDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: scale(8),
+        height: scale(8),
+        borderRadius: scale(4),
         backgroundColor: COLORS.success,
+        shadowColor: COLORS.success,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: scale(5),
     },
     onlineText: {
-        fontSize: FONTS.sizes.xs,
-        fontWeight: '700',
+        fontSize: moderateScale(10),
+        fontWeight: '800',
         color: COLORS.success,
+        textTransform: 'uppercase',
     },
     requestsContainer: {
         position: 'absolute',
-        bottom: 120,
+        bottom: scale(130),
         left: 0,
         right: 0,
     },
     requestsTitle: {
-        fontSize: FONTS.sizes.md,
-        fontWeight: '700',
+        fontSize: FONTS.sizes.sm,
+        fontWeight: '800',
         color: COLORS.textPrimary,
         paddingHorizontal: SPACING.lg,
         marginBottom: SPACING.sm,
-        textShadowColor: 'rgba(0,0,0,0.8)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 1.5,
     },
     requestsList: {
-        paddingHorizontal: SPACING.md,
-        gap: SPACING.sm,
+        paddingHorizontal: scale(SPACING.md),
+        gap: scale(SPACING.sm),
     },
     requestCard: {
-        width: width - 48,
-        backgroundColor: COLORS.bgSecondary,
+        width: DEVICE_SIZE.TABLET || DEVICE_SIZE.DESKTOP ? (SCREEN_WIDTH / 2) - scale(32) : SCREEN_WIDTH - scale(48),
+        backgroundColor: COLORS.glassBgDark,
         borderRadius: RADIUS.xl,
-        padding: SPACING.md,
+        padding: scale(SPACING.md),
         borderWidth: 1,
-        borderColor: COLORS.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
-        marginRight: SPACING.sm,
+        borderColor: COLORS.glassBorder,
+        marginRight: scale(SPACING.sm),
+        overflow: 'hidden',
     },
     requestHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: SPACING.md,
     },
     riderInfo: {
@@ -564,25 +630,30 @@ const styles = StyleSheet.create({
         color: COLORS.textPrimary,
     },
     distanceText: {
-        fontSize: FONTS.sizes.xs,
-        color: COLORS.textSecondary,
-        marginTop: 1,
+        fontSize: 11,
+        color: COLORS.neonPurple,
+        fontWeight: '600',
     },
     priceBox: {
         alignItems: 'flex-end',
     },
     proposedPrice: {
-        fontSize: FONTS.sizes.xl,
-        fontWeight: '800',
-        color: COLORS.accent,
+        fontSize: moderateScale(FONTS.sizes.xl),
+        fontWeight: '900',
+        color: COLORS.neonBlue,
+        textShadowColor: COLORS.neonBlue,
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: scale(10),
     },
     earningsText: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(10),
         color: COLORS.success,
-        fontWeight: '600',
+        fontWeight: '700',
+        marginTop: scale(2),
     },
     routeInfo: {
         marginBottom: SPACING.md,
+        paddingLeft: SPACING.xs,
     },
     routeRow: {
         flexDirection: 'row',
@@ -590,70 +661,77 @@ const styles = StyleSheet.create({
         gap: SPACING.sm,
     },
     routeDot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
+        width: scale(8),
+        height: scale(8),
+        borderRadius: scale(4),
+        borderWidth: 1.5,
+        borderColor: '#fff',
     },
     routeText: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(13),
         color: COLORS.textSecondary,
         flex: 1,
     },
     routeLine: {
-        width: 2,
-        height: 16,
-        backgroundColor: COLORS.border,
-        marginLeft: 4,
-        marginVertical: 2,
+        width: 1,
+        height: scale(12),
+        backgroundColor: COLORS.glassBorder,
+        marginLeft: scale(3.5),
+        marginVertical: scale(2),
     },
     requestFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        paddingTop: SPACING.sm,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.glassBorder,
     },
     paymentTag: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: COLORS.bgCard,
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderRadius: RADIUS.sm,
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: 4,
-        gap: 4,
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(4),
+        gap: scale(4),
     },
     paymentEmoji: {
-        fontSize: 14,
+        fontSize: moderateScale(12),
     },
     paymentLabel: {
-        fontSize: FONTS.sizes.xs,
-        color: COLORS.textSecondary,
-        fontWeight: '600',
+        fontSize: moderateScale(10),
+        color: COLORS.textMuted,
+        fontWeight: '800',
+        textTransform: 'uppercase',
     },
     actionButtons: {
         flexDirection: 'row',
         gap: SPACING.sm,
     },
     acceptBtn: {
-        backgroundColor: COLORS.accent,
+        backgroundColor: COLORS.neonBlue,
         borderRadius: RADIUS.md,
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: 10,
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 4,
+        paddingHorizontal: scale(SPACING.lg),
+        paddingVertical: scale(10),
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: scale(10),
+        elevation: 10,
     },
     acceptBtnText: {
-        fontSize: FONTS.sizes.md,
-        fontWeight: '700',
-        color: '#ffffff',
+        fontSize: moderateScale(14),
+        fontWeight: '900',
+        color: COLORS.bgPrimary,
+        textTransform: 'uppercase',
     },
     commissionNote: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(9),
         color: COLORS.textMuted,
         textAlign: 'center',
-        marginTop: SPACING.sm,
-        fontStyle: 'italic',
+        marginTop: scale(SPACING.sm),
+        opacity: 0.7,
     },
     bottomSection: {
         position: 'absolute',
@@ -661,167 +739,172 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         paddingHorizontal: SPACING.md,
-        paddingBottom: Platform.OS === 'ios' ? 34 : SPACING.md,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     },
     waitingCard: {
-        backgroundColor: COLORS.bgOverlay,
+        backgroundColor: COLORS.glassBgDark,
         borderRadius: RADIUS.lg,
-        padding: SPACING.md,
+        padding: scale(SPACING.md),
         flexDirection: 'row',
         alignItems: 'center',
-        gap: SPACING.sm,
-        marginBottom: SPACING.sm,
+        gap: scale(SPACING.sm),
+        marginBottom: scale(SPACING.md),
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.glassBorder,
     },
     waitingIcon: {
-        fontSize: 22,
+        fontSize: moderateScale(22),
     },
     waitingText: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(12),
         color: COLORS.textSecondary,
         flex: 1,
+        fontWeight: '500',
     },
     connectRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: SPACING.sm,
+        gap: SPACING.md,
     },
     settingsBtn: {
-        backgroundColor: COLORS.bgOverlay,
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        backgroundColor: COLORS.glassBgDark,
+        width: scale(56),
+        height: scale(56),
+        borderRadius: scale(28),
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: COLORS.glassBorder,
     },
     connectBtn: {
-        backgroundColor: COLORS.bgCard,
+        backgroundColor: 'transparent',
         borderRadius: RADIUS.full,
-        paddingVertical: 18,
+        paddingVertical: scale(18),
         alignItems: 'center',
         borderWidth: 2,
-        borderColor: COLORS.accent,
+        borderColor: COLORS.neonBlue,
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: scale(5),
     },
     connectBtnOnline: {
-        backgroundColor: COLORS.accent,
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 16,
-        elevation: 8,
+        backgroundColor: COLORS.neonBlue,
+        shadowOpacity: 0.8,
+        shadowRadius: 15,
+        elevation: 10,
     },
     connectBtnText: {
-        fontSize: FONTS.sizes.xl,
-        fontWeight: '800',
-        color: COLORS.accent,
+        fontSize: moderateScale(16),
+        fontWeight: '900',
+        color: COLORS.neonBlue,
+        textTransform: 'uppercase',
+        letterSpacing: 2,
     },
     connectBtnTextOnline: {
-        color: '#ffffff',
+        color: COLORS.bgPrimary,
     },
     riderMetrics: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: SPACING.xs,
-        marginTop: 2,
+        gap: scale(SPACING.xs),
+        marginTop: scale(2),
     },
     riderRatingText: {
-        fontSize: 12,
-        fontWeight: '700',
+        fontSize: moderateScale(11),
+        fontWeight: '800',
     },
     riderTripsBadge: {
-        fontSize: 10,
+        fontSize: moderateScale(9),
         color: COLORS.textMuted,
-        backgroundColor: COLORS.bgPrimary,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingHorizontal: scale(5),
+        paddingVertical: scale(1),
+        borderRadius: scale(4),
     },
     // Menu
     menuOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.7)',
     },
     menuContent: {
-        width: width * 0.8,
+        width: DEVICE_SIZE.TABLET || DEVICE_SIZE.DESKTOP ? scale(300) : width * 0.8,
         height: '100%',
-        backgroundColor: COLORS.bgSecondary,
+        backgroundColor: COLORS.bgPrimary,
         borderRightWidth: 1,
-        borderRightColor: COLORS.border,
+        borderRightColor: COLORS.neonBlue + '40',
+        paddingTop: Platform.OS === 'ios' ? 60 : 40,
     },
     menuHeader: {
         padding: SPACING.xl,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        backgroundColor: COLORS.bgCard,
         alignItems: 'center',
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
+        borderBottomColor: COLORS.glassBorder,
     },
     userAvatarLarge: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: COLORS.bgPrimary,
+        width: scale(100),
+        height: scale(100),
+        borderRadius: scale(50),
+        backgroundColor: COLORS.glassBgDark,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SPACING.md,
+        marginBottom: scale(SPACING.md),
         borderWidth: 2,
-        borderColor: COLORS.accent,
+        borderColor: COLORS.neonBlue,
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
     },
     menuUserName: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: moderateScale(22),
+        fontWeight: '900',
         color: COLORS.textPrimary,
-        marginBottom: SPACING.xs,
+        marginBottom: scale(SPACING.xs),
     },
     ratingBadgeContainer: {
         alignItems: 'center',
         marginBottom: SPACING.sm,
     },
     ratingPercent: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: moderateScale(16),
+        fontWeight: '800',
     },
     recommendedBadge: {
         backgroundColor: COLORS.success + '20',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 4,
-        marginTop: 4,
+        paddingHorizontal: scale(12),
+        paddingVertical: scale(4),
+        borderRadius: scale(4),
+        marginTop: scale(6),
         borderWidth: 1,
         borderColor: COLORS.success,
     },
     recommendedText: {
-        fontSize: 10,
-        fontWeight: '900',
+        fontSize: moderateScale(10),
         color: COLORS.success,
+        fontWeight: '900',
     },
     userTrips: {
-        fontSize: 14,
+        fontSize: moderateScale(12),
         color: COLORS.textMuted,
+        marginTop: scale(4),
     },
     menuItems: {
-        padding: SPACING.lg,
         flex: 1,
+        padding: SPACING.lg,
     },
     menuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: SPACING.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.borderLight,
+        paddingVertical: SPACING.md,
+        gap: SPACING.md,
     },
     menuItemIcon: {
-        fontSize: 22,
-        marginRight: SPACING.md,
+        fontSize: moderateScale(24),
     },
     menuItemText: {
-        fontSize: 16,
+        fontSize: moderateScale(16),
+        fontWeight: '700',
         color: COLORS.textPrimary,
-        fontWeight: '500',
     },
 });

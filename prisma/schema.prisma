@@ -1,0 +1,83 @@
+// Prisma Schema for Elysium Vanguard Driving
+// Optimized for PostgreSQL + PostGIS on Supabase
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id           String   @id @db.Uuid
+  email        String   @unique
+  name         String
+  phone        String?
+  role         String   // 'rider' or 'driver'
+  ratingSum    Float    @default(0) @map("rating_sum")
+  ratingCount  Int      @default(0) @map("rating_count")
+  totalRides   Int      @default(0) @map("total_rides")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  driverProfile Driver?
+  ridesAsRider  Ride[]   @relation("RiderRides")
+  ridesAsDriver Ride[]   @relation("DriverRides")
+
+  @@map("profiles")
+}
+
+model Driver {
+  id            String   @id @db.Uuid @map("id")
+  profile       Profile  @relation(fields: [id], references: [id])
+  isOnline      Boolean  @default(false) @map("is_online")
+  vehicleMake   String?  @map("vehicle_make")
+  vehicleModel  String?  @map("vehicle_model")
+  vehiclePlate  String?  @map("vehicle_plate")
+  vehicleColor  String?  @map("vehicle_color")
+  currentRideId String?  @map("current_ride_id") @db.Uuid
+  
+  // PostGIS doesn't have a direct Prisma type for geography, 
+  // so we use Unsupported and Raw SQL for updates/reads
+  lastLocation  Unsupported("geography(Point, 4326)")? @map("last_location")
+  
+  updatedAt     DateTime @default(now()) @map("updated_at")
+
+  @@map("drivers")
+}
+
+model Ride {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  riderId        String      @db.Uuid @map("rider_id")
+  rider          Profile     @relation("RiderRides", fields: [riderId], references: [id])
+  driverId       String?     @db.Uuid @map("driver_id")
+  driver         Profile?    @relation("DriverRides", fields: [driverId], references: [id])
+  status         String      @default("pending") // 'pending', 'accepted', 'ongoing', 'completed', 'cancelled'
+  
+  pickupLocation Unsupported("geography(Point, 4326)") @map("pickup_location")
+  pickupAddress  String      @map("pickup_address")
+  
+  fare           Decimal?    @db.Decimal(10, 2)
+  distanceKm     Decimal?    @db.Decimal(10, 2) @map("distance_km")
+  durationMin    Int?        @map("duration_min")
+  
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  stops          RideStop[]
+
+  @@map("rides")
+}
+
+model RideStop {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rideId    String      @db.Uuid @map("ride_id")
+  ride      Ride        @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  order     Int         @map("stop_order")
+  location  Unsupported("geography(Point, 4326)")
+  address   String
+
+  @@map("ride_stops")
+}

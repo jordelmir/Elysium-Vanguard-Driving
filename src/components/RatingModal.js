@@ -4,6 +4,7 @@ import {
     Dimensions, Animated, Platform
 } from 'react-native';
 import { COLORS, FONTS, RADIUS, SPACING } from '../theme/colors';
+import { scale, moderateScale } from '../theme/responsive';
 
 const { width } = Dimensions.get('window');
 
@@ -99,46 +100,47 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.8)',
         justifyContent: 'center',
         alignItems: 'center',
-        padding: SPACING.lg,
+        padding: scale(SPACING.lg),
     },
     content: {
         width: '100%',
+        maxWidth: scale(500), // Limit width on tablets/web
         backgroundColor: COLORS.bgSecondary,
         borderRadius: RADIUS.xl,
-        padding: SPACING.xl,
+        padding: scale(SPACING.xl),
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
     },
     title: {
-        fontSize: 22,
+        fontSize: moderateScale(22),
         fontWeight: 'bold',
         color: COLORS.textPrimary,
         textAlign: 'center',
-        marginBottom: SPACING.sm,
+        marginBottom: scale(SPACING.sm),
     },
     subtitle: {
-        fontSize: 14,
+        fontSize: moderateScale(14),
         color: COLORS.textMuted,
         textAlign: 'center',
-        marginBottom: SPACING.xl,
+        marginBottom: scale(SPACING.xl),
     },
     label: {
-        fontSize: 18,
+        fontSize: moderateScale(18),
         fontWeight: 'bold',
-        marginBottom: SPACING.md,
+        marginBottom: scale(SPACING.md),
     },
     starsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 8,
-        marginBottom: SPACING.xl,
+        gap: scale(8),
+        marginBottom: scale(SPACING.xl),
     },
     starButton: {
-        width: 45,
-        height: 45,
-        borderRadius: 22.5,
+        width: scale(45),
+        height: scale(45),
+        borderRadius: scale(22.5),
         backgroundColor: COLORS.bgPrimary,
         justifyContent: 'center',
         alignItems: 'center',
@@ -151,7 +153,7 @@ const styles = StyleSheet.create({
     },
     starText: {
         color: COLORS.textMuted,
-        fontSize: 16,
+        fontSize: moderateScale(16),
         fontWeight: 'bold',
     },
     starTextActive: {
@@ -159,16 +161,17 @@ const styles = StyleSheet.create({
     },
     finishBtn: {
         width: '100%',
-        height: 55,
+        height: scale(55),
         backgroundColor: COLORS.accent,
         borderRadius: RADIUS.lg,
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: SPACING.md,
+        marginTop: scale(SPACING.md),
     },
     finishBtnText: {
         color: COLORS.bgPrimary,
-        fontSize: 18,
+        fontSize: moderateScale(18),
         fontWeight: 'bold',
     },
 });
+

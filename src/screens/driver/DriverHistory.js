@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, FlatList, StyleSheet, Platform,
+    View, Text, FlatList, StyleSheet, Platform, RefreshControl,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { formatPrice, calculateCommission } from '../../lib/pricing';
 import { COLORS, FONTS, SPACING, RADIUS } from '../../theme/colors';
+import { SAFE_TOP, scale, moderateScale } from '../../theme/responsive';
 
 export default function DriverHistory() {
     const { user } = useAuth();
     const [rides, setRides] = useState([]);
     const [totalEarnings, setTotalEarnings] = useState(0);
     const [totalCommission, setTotalCommission] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
+    const fetchHistory = () => {
         if (!user) return;
         const q = query(
             collection(db, 'rides'),
@@ -45,22 +47,42 @@ export default function DriverHistory() {
             setRides(list);
             setTotalEarnings(earnings);
             setTotalCommission(commission);
+            setRefreshing(false);
+        }, (error) => {
+            console.error("Error fetching history:", error);
+            setRefreshing(false);
         });
 
         return unsubscribe;
+    };
+
+    useEffect(() => {
+        const unsubscribe = fetchHistory();
+        return () => unsubscribe && unsubscribe();
     }, [user]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchHistory();
+    };
 
     const renderRide = ({ item }) => {
         const price = item.acceptedPrice || item.proposedPrice || 0;
         const { driverEarns, commission } = calculateCommission(price);
-        const date = item.createdAt?.seconds
-            ? new Date(item.createdAt.seconds * 1000).toLocaleDateString('es-CR')
-            : '';
+        const dateObj = item.createdAt?.seconds
+            ? new Date(item.createdAt.seconds * 1000)
+            : null;
+        const date = dateObj ? dateObj.toLocaleDateString('es-CR') : '';
+        const time = dateObj ? dateObj.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '';
+        const finalDropoff = item.dropoffs?.[item.dropoffs.length - 1] || item.dropoff;
 
         return (
             <View style={styles.rideCard}>
                 <View style={styles.rideHeader}>
-                    <Text style={styles.rideDate}>{date}</Text>
+                    <View>
+                        <Text style={styles.rideDate}>{date}</Text>
+                        {time ? <Text style={styles.rideTime}>{time}</Text> : null}
+                    </View>
                     <View style={styles.earningsCol}>
                         <Text style={styles.rideEarnings}>{formatPrice(driverEarns)}</Text>
                         <Text style={styles.commissionText}>-{formatPrice(commission)} (1%)</Text>
@@ -77,7 +99,7 @@ export default function DriverHistory() {
                     <View style={styles.routeRow}>
                         <View style={[styles.dot, { backgroundColor: COLORS.error }]} />
                         <Text style={styles.routeText} numberOfLines={1}>
-                            {item.dropoff?.name || 'Destino'}
+                            {finalDropoff?.name || 'Destino'}
                         </Text>
                     </View>
                 </View>
@@ -87,6 +109,9 @@ export default function DriverHistory() {
                         {item.paymentMethod === 'sinpe' ? '📱 SINPE' : '💵 Efectivo'}
                     </Text>
                     <Text style={styles.riderNameTag}>👤 {item.riderName || 'Pasajero'}</Text>
+                    {item.distance ? (
+                        <Text style={styles.distanceTag}>📏 {item.distance} km</Text>
+                    ) : null}
                 </View>
             </View>
         );
@@ -128,6 +153,15 @@ export default function DriverHistory() {
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={styles.list}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={COLORS.accent}
+                            colors={[COLORS.accent]}
+                            backgroundColor={COLORS.bgPrimary}
+                        />
+                    }
                 />
             )}
         </View>
@@ -140,55 +174,55 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.bgPrimary,
     },
     header: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 40,
-        paddingHorizontal: SPACING.lg,
-        paddingBottom: SPACING.md,
+        paddingTop: SAFE_TOP,
+        paddingHorizontal: scale(SPACING.lg),
+        paddingBottom: scale(SPACING.md),
         backgroundColor: COLORS.bgSecondary,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
     },
     title: {
-        fontSize: FONTS.sizes.xxl,
+        fontSize: moderateScale(FONTS.sizes.xxl),
         fontWeight: '800',
         color: COLORS.textPrimary,
-        marginBottom: SPACING.md,
+        marginBottom: scale(SPACING.md),
     },
     statsRow: {
         flexDirection: 'row',
-        gap: SPACING.sm,
+        gap: scale(SPACING.sm),
     },
     statCard: {
         flex: 1,
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.md,
-        padding: SPACING.sm,
+        padding: scale(SPACING.sm),
         alignItems: 'center',
         borderWidth: 1,
         borderColor: COLORS.borderLight,
     },
     statValue: {
-        fontSize: FONTS.sizes.lg,
+        fontSize: moderateScale(FONTS.sizes.lg),
         fontWeight: '800',
         color: COLORS.accent,
     },
     statValueSmall: {
-        fontSize: FONTS.sizes.md,
+        fontSize: moderateScale(FONTS.sizes.md),
         fontWeight: '800',
         color: COLORS.textPrimary,
     },
     statLabel: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(FONTS.sizes.xs),
         color: COLORS.textMuted,
-        marginTop: 2,
+        marginTop: scale(2),
     },
     list: {
-        padding: SPACING.md,
+        padding: scale(SPACING.md),
     },
     rideCard: {
         backgroundColor: COLORS.bgCard,
         borderRadius: RADIUS.lg,
-        padding: SPACING.md,
-        marginBottom: SPACING.sm,
+        padding: scale(SPACING.md),
+        marginBottom: scale(SPACING.sm),
         borderWidth: 1,
         borderColor: COLORS.borderLight,
     },
@@ -196,56 +230,65 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: SPACING.sm,
+        marginBottom: scale(SPACING.sm),
     },
     rideDate: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(FONTS.sizes.sm),
         color: COLORS.textMuted,
+    },
+    rideTime: {
+        fontSize: moderateScale(FONTS.sizes.xs),
+        color: COLORS.textMuted,
+        marginTop: scale(2),
     },
     earningsCol: {
         alignItems: 'flex-end',
     },
     rideEarnings: {
-        fontSize: FONTS.sizes.lg,
+        fontSize: moderateScale(FONTS.sizes.lg),
         fontWeight: '800',
         color: COLORS.accent,
     },
     commissionText: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(FONTS.sizes.xs),
         color: COLORS.textMuted,
     },
     routeEl: {
-        gap: SPACING.xs,
-        marginBottom: SPACING.sm,
+        gap: scale(SPACING.xs),
+        marginBottom: scale(SPACING.sm),
     },
     routeRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: SPACING.sm,
+        gap: scale(SPACING.sm),
     },
     dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: scale(8),
+        height: scale(8),
+        borderRadius: scale(4),
     },
     routeText: {
-        fontSize: FONTS.sizes.sm,
+        fontSize: moderateScale(FONTS.sizes.sm),
         color: COLORS.textSecondary,
         flex: 1,
     },
     rideFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        paddingTop: SPACING.sm,
+        paddingTop: scale(SPACING.sm),
         borderTopWidth: 1,
         borderTopColor: COLORS.borderLight,
     },
     paymentTag: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(FONTS.sizes.xs),
         color: COLORS.textMuted,
     },
     riderNameTag: {
-        fontSize: FONTS.sizes.xs,
+        fontSize: moderateScale(FONTS.sizes.xs),
+        color: COLORS.textMuted,
+    },
+    distanceTag: {
+        fontSize: moderateScale(FONTS.sizes.xs),
         color: COLORS.textMuted,
     },
     empty: {
@@ -254,17 +297,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     emptyIcon: {
-        fontSize: 64,
-        marginBottom: SPACING.md,
+        fontSize: scale(64),
+        marginBottom: scale(SPACING.md),
     },
     emptyText: {
-        fontSize: FONTS.sizes.xl,
+        fontSize: moderateScale(FONTS.sizes.xl),
         fontWeight: '700',
         color: COLORS.textPrimary,
     },
     emptySubtext: {
-        fontSize: FONTS.sizes.md,
+        fontSize: moderateScale(FONTS.sizes.md),
         color: COLORS.textSecondary,
-        marginTop: SPACING.xs,
+        marginTop: scale(SPACING.xs),
     },
 });

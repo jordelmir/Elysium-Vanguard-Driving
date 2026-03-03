@@ -16,6 +16,8 @@ import RiderHistory from '../screens/rider/RiderHistory';
 import DriverDashboard from '../screens/driver/DriverDashboard';
 import ActiveRide from '../screens/driver/ActiveRide';
 import DriverHistory from '../screens/driver/DriverHistory';
+import ProfileScreen from '../screens/ProfileScreen';
+import SplashScreen from '../screens/SplashScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -70,6 +72,14 @@ function RiderTabs() {
                     tabBarIcon: ({ color, size }) => <TabIcon name="history" color={color} size={size} />,
                 }}
             />
+            <Tab.Screen
+                name="RiderProfile"
+                component={ProfileScreen}
+                options={{
+                    tabBarLabel: 'Perfil',
+                    tabBarIcon: ({ color, size }) => <TabIcon name="profile" color={color} size={size} />,
+                }}
+            />
         </Tab.Navigator>
     );
 }
@@ -112,20 +122,26 @@ function DriverTabs() {
                     tabBarIcon: ({ color, size }) => <TabIcon name="earnings" color={color} size={size} />,
                 }}
             />
+            <Tab.Screen
+                name="DriverProfile"
+                component={ProfileScreen}
+                options={{
+                    tabBarLabel: 'Perfil',
+                    tabBarIcon: ({ color, size }) => <TabIcon name="profile" color={color} size={size} />,
+                }}
+            />
         </Tab.Navigator>
     );
 }
 
 export default function AppNavigator() {
-    const { user, userData, loading } = useAuth();
+    const { user, userData, loading, cachedRole } = useAuth();
+    const role = userData?.role || cachedRole;
 
-    if (loading) {
-        return (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.bgPrimary }}>
-                <Text style={{ color: COLORS.accent, fontSize: 18, fontWeight: 'bold' }}>Elysium Vanguard Driving</Text>
-                <Text style={{ color: COLORS.textSecondary, marginTop: 8 }}>Cargando...</Text>
-            </View>
-        );
+    // Show splash only if we are truly waiting for the first auth check
+    // or if we have a user but NO role information at all (first time or cache cleared)
+    if (loading && !role) {
+        return <SplashScreen />;
     }
 
     return (
@@ -143,7 +159,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="Login" component={LoginScreen} />
                         <Stack.Screen name="Register" component={RegisterScreen} />
                     </>
-                ) : userData?.role === 'driver' ? (
+                ) : role === 'driver' ? (
                     // Driver screens
                     <>
                         <Stack.Screen name="DriverMain" component={DriverTabs} />
