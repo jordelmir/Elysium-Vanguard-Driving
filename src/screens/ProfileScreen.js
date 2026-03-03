@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, TextInput, Alert,
     ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
+    SafeAreaView
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth, calculateRatingPercentage } from '../context/AuthContext';
 import { db } from '../lib/firebase';
 import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -24,12 +27,10 @@ export default function ProfileScreen({ navigation }) {
             setName(userData.name || '');
             setPhone(userData.phone || '');
         } else if (user) {
-            // If we have a user but no data, try to refresh
             refreshUserData();
         }
     }, [userData, user]);
 
-    // Listen for driver-specific data
     useEffect(() => {
         if (!user || userData?.role !== 'driver') return;
         const unsubscribe = onSnapshot(doc(db, 'drivers', user.uid), (docSnap) => {
@@ -47,39 +48,18 @@ export default function ProfileScreen({ navigation }) {
         }
         setIsSaving(true);
         try {
-            // Create a 5-second timeout promise
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('timeout')), 5000)
-            );
-
-            // Execute update and refresh with timeout protection
-            await Promise.race([
-                (async () => {
-                    await updateDoc(doc(db, 'users', user.uid), {
-                        name: name.trim(),
-                        phone: phone.trim(),
-                    });
-                    await refreshUserData();
-                })(),
-                timeoutPromise
-            ]);
-
+            await updateDoc(doc(db, 'users', user.uid), {
+                name: name.trim(),
+                phone: phone.trim(),
+            });
+            await refreshUserData();
             setIsEditing(false);
             Alert.alert('✅ Éxito', 'Perfil actualizado correctamente.');
         } catch (error) {
             console.error('Save profile error:', error);
-            if (error.message === 'timeout') {
-                Alert.alert(
-                    '⏳ Tiempo Agotado',
-                    'La conexión es lenta. El servidor procesará los cambios en breve.',
-                    [{ text: 'Entendido', onPress: () => setIsEditing(false) }]
-                );
-            } else {
-                Alert.alert('Error', 'No se pudo conectar con el servidor. Inténtalo de nuevo.');
-            }
+            Alert.alert('Error', 'No se pudo conectar con el servidor.');
         } finally {
             setIsSaving(false);
-            // Safety: Ensure loading state is cleared and we exit editing mode if needed
         }
     };
 
@@ -101,164 +81,144 @@ export default function ProfileScreen({ navigation }) {
     return (
         <View style={styles.container}>
             <ScrollView
-                contentContainerStyle={styles.scrollContent}
+                stickyHeaderIndices={[0]}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollContent}
             >
-                {/* Header Card */}
-                <View style={styles.headerCard}>
-                    <View style={styles.avatarContainer}>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarEmoji}>
-                                {isDriver ? '🚗' : '👤'}
-                            </Text>
-                        </View>
-                        <View style={styles.roleBadge}>
-                            <Text style={styles.roleBadgeText}>
-                                {isDriver ? 'Conductor' : 'Pasajero'}
-                            </Text>
-                        </View>
-                    </View>
+                {/* 1. Header Mundial con Gradiente y Avatar Pro */}
+                <View style={styles.eliteHeaderContainer}>
+                    <LinearGradient
+                        colors={['#1A1A1A', '#000000']}
+                        style={styles.headerGradient}
+                    >
+                        <SafeAreaView>
+                            <View style={styles.headerTopRow}>
+                                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                                    <Ionicons name="chevron-back" size={24} color="#FFF" />
+                                </TouchableOpacity>
+                                <Text style={styles.headerTitle}>MI PERFIL</Text>
+                                <TouchableOpacity onPress={() => setIsEditing(!isEditing)} style={styles.editIconBtn}>
+                                    <Ionicons name={isEditing ? "close" : "create-outline"} size={22} color={isEditing ? "#F44336" : "#FFD600"} />
+                                </TouchableOpacity>
+                            </View>
 
-                    <Text style={styles.userName}>{userData?.name || user?.displayName || 'Usuario'}</Text>
-                    <Text style={styles.userEmail}>{userData?.email || user?.email || ''}</Text>
-
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>⭐ {ratingDisplay}</Text>
-                            <Text style={styles.statLabel}>Calificación</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{totalRides}</Text>
-                            <Text style={styles.statLabel}>Viajes</Text>
-                        </View>
-                        {isDriver && driverData && (
-                            <>
-                                <View style={styles.statDivider} />
-                                <View style={styles.statItem}>
-                                    <Text style={styles.statValue}>
-                                        {formatPrice(driverData.totalEarnings || 0)}
-                                    </Text>
-                                    <Text style={styles.statLabel}>Ganancias</Text>
+                            <View style={styles.profileHero}>
+                                <View style={styles.avatarWrapper}>
+                                    <View style={styles.avatarGlow} />
+                                    <View style={styles.avatarMain}>
+                                        <Text style={styles.avatarEmoji}>{isDriver ? '🚗' : '👤'}</Text>
+                                    </View>
+                                    <View style={styles.onlineBadge} />
                                 </View>
-                            </>
-                        )}
+                                <Text style={styles.heroName}>{userData?.name || 'Vanguard Member'}</Text>
+                                <View style={styles.roleTag}>
+                                    <Text style={styles.roleTagText}>{isDriver ? 'DRIVER GOLD' : 'RIDER ELITE'}</Text>
+                                </View>
+                            </View>
+                        </SafeAreaView>
+                    </LinearGradient>
+                </View>
+
+                {/* 2. Grid de Estadísticas Premium */}
+                <View style={styles.statsGrid}>
+                    <View style={styles.statBox}>
+                        <Text style={styles.statValue}>⭐ {ratingDisplay}</Text>
+                        <Text style={styles.statLabel}>Calificación</Text>
+                    </View>
+                    <View style={styles.statBox}>
+                        <Text style={styles.statValue}>{totalRides}</Text>
+                        <Text style={styles.statLabel}>Viajes</Text>
+                    </View>
+                    <View style={styles.statBox}>
+                        <Text style={styles.statValue}>2y</Text>
+                        <Text style={styles.statLabel}>Antigüedad</Text>
                     </View>
                 </View>
 
-                {/* Info Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Información Personal</Text>
-                        {!isEditing ? (
-                            <TouchableOpacity onPress={() => setIsEditing(true)}>
-                                <Text style={styles.editBtn}>✏️ Editar</Text>
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity onPress={() => {
-                                setIsEditing(false);
-                                setName(userData?.name || '');
-                                setPhone(userData?.phone || '');
-                            }}>
-                                <Text style={styles.cancelEditBtn}>Cancelar</Text>
-                            </TouchableOpacity>
-                        )}
+                {/* 3. Formulario de Datos Pro */}
+                <View style={styles.sectionContainer}>
+                    <Text style={styles.sectionHeadline}>Información de Cuenta</Text>
+
+                    <View style={styles.inputGroup}>
+                        <Ionicons name="person-outline" size={20} color="#555" />
+                        <View style={styles.inputWrapper}>
+                            <Text style={styles.inputLabel}>NOMBRE COMPLETO</Text>
+                            {isEditing ? (
+                                <TextInput
+                                    style={styles.eliteInput}
+                                    value={name}
+                                    onChangeText={setName}
+                                    placeholderTextColor="#444"
+                                />
+                            ) : (
+                                <Text style={styles.readOnlyValue}>{name}</Text>
+                            )}
+                        </View>
                     </View>
 
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Nombre</Text>
-                        {isEditing ? (
-                            <TextInput
-                                style={styles.infoInput}
-                                value={name}
-                                onChangeText={setName}
-                                placeholderTextColor={COLORS.textMuted}
-                            />
-                        ) : (
-                            <Text style={styles.infoValue}>{userData?.name || '-'}</Text>
-                        )}
-                    </View>
-
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Email</Text>
-                        <Text style={styles.infoValue}>{userData?.email || user?.email || '-'}</Text>
-                    </View>
-
-                    <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Teléfono</Text>
-                        {isEditing ? (
-                            <TextInput
-                                style={styles.infoInput}
-                                value={phone}
-                                onChangeText={setPhone}
-                                keyboardType="phone-pad"
-                                placeholderTextColor={COLORS.textMuted}
-                            />
-                        ) : (
-                            <Text style={styles.infoValue}>{userData?.phone || '-'}</Text>
-                        )}
+                    <View style={styles.inputGroup}>
+                        <Ionicons name="call-outline" size={20} color="#555" />
+                        <View style={styles.inputWrapper}>
+                            <Text style={styles.inputLabel}>TELÉFONO DE CONTACTO</Text>
+                            {isEditing ? (
+                                <TextInput
+                                    style={styles.eliteInput}
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    keyboardType="phone-pad"
+                                    placeholderTextColor="#444"
+                                />
+                            ) : (
+                                <Text style={styles.readOnlyValue}>{phone || 'No registrado'}</Text>
+                            )}
+                        </View>
                     </View>
 
                     {isEditing && (
-                        <TouchableOpacity
-                            style={styles.saveBtn}
-                            onPress={handleSave}
-                            disabled={isSaving}
-                        >
-                            {isSaving ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.saveBtnText}>Guardar Cambios</Text>
-                            )}
+                        <TouchableOpacity style={styles.vanguardSaveBtn} onPress={handleSave} disabled={isSaving}>
+                            {isSaving ? <ActivityIndicator color="#000" /> : <Text style={styles.saveText}>ACTUALIZAR PERFIL</Text>}
                         </TouchableOpacity>
                     )}
                 </View>
 
-                {/* Vehicle Info (Driver Only) */}
-                {isDriver && driverData?.vehicle && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Mi Vehículo</Text>
+                {/* 4. Tarjetas de Acción de Clase Mundial */}
+                <View style={[styles.sectionContainer, { marginTop: 10 }]}>
+                    <Text style={styles.sectionHeadline}>Configuración y Seguridad</Text>
 
-                        <View style={styles.vehicleCard}>
-                            <Text style={styles.vehicleEmoji}>🚘</Text>
-                            <View style={styles.vehicleInfo}>
-                                <Text style={styles.vehicleName}>
-                                    {driverData.vehicle.make} {driverData.vehicle.model}
-                                </Text>
-                                <Text style={styles.vehicleDetail}>
-                                    Color: {driverData.vehicle.color}
-                                </Text>
-                                <View style={styles.plateBadge}>
-                                    <Text style={styles.plateText}>
-                                        {driverData.vehicle.plate}
-                                    </Text>
-                                </View>
-                            </View>
+                    <TouchableOpacity style={styles.vanguardCard} onPress={() => navigation.navigate(isDriver ? 'DriverHistory' : 'RiderHistory')}>
+                        <View style={[styles.cardIconBox, { backgroundColor: 'rgba(255,214,0,0.1)' }]}>
+                            <Ionicons name="time-outline" size={22} color="#FFD600" />
                         </View>
-                    </View>
-                )}
-
-                {/* Actions */}
-                <View style={styles.section}>
-                    <TouchableOpacity style={styles.actionItem} onPress={() => {
-                        if (isDriver) {
-                            navigation.navigate('DriverHistory');
-                        } else {
-                            navigation.navigate('RiderHistory');
-                        }
-                    }}>
-                        <Text style={styles.actionIcon}>📋</Text>
-                        <Text style={styles.actionText}>Historial de Viajes</Text>
-                        <Text style={styles.actionArrow}>›</Text>
+                        <View style={styles.cardContent}>
+                            <Text style={styles.cardMain}>Historial de Viajes</Text>
+                            <Text style={styles.cardSub}>Ver trayectos y facturación</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#444" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.actionItem, styles.logoutAction]} onPress={confirmLogout}>
-                        <Text style={styles.actionIcon}>🚪</Text>
-                        <Text style={[styles.actionText, styles.logoutText]}>Cerrar Sesión</Text>
+                    <TouchableOpacity style={styles.vanguardCard}>
+                        <View style={[styles.cardIconBox, { backgroundColor: 'rgba(76,175,80,0.1)' }]}>
+                            <Ionicons name="wallet-outline" size={22} color="#4CAF50" />
+                        </View>
+                        <View style={styles.cardContent}>
+                            <Text style={styles.cardMain}>Métodos de Pago</Text>
+                            <Text style={styles.cardSub}>Gestionar tarjetas y efectivo</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#444" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={[styles.vanguardCard, styles.logoutCard]} onPress={confirmLogout}>
+                        <View style={[styles.cardIconBox, { backgroundColor: 'rgba(244,67,54,0.1)' }]}>
+                            <Ionicons name="log-out-outline" size={22} color="#F44336" />
+                        </View>
+                        <View style={styles.cardContent}>
+                            <Text style={[styles.cardMain, { color: '#F44336' }]}>Cerrar Sesión</Text>
+                            <Text style={styles.cardSub}>Salir de la cuenta de forma segura</Text>
+                        </View>
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ height: SAFE_BOTTOM + scale(20) }} />
+                <View style={{ height: scale(100) }} />
             </ScrollView>
         </View>
     );
@@ -267,225 +227,236 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.bgPrimary,
+        backgroundColor: '#000',
     },
     scrollContent: {
-        paddingTop: SAFE_TOP + scale(SPACING.md),
-        paddingHorizontal: scale(SPACING.md),
+        flexGrow: 1,
     },
-    headerCard: {
-        backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.xl,
-        padding: scale(SPACING.xl),
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        marginBottom: scale(SPACING.md),
-    },
-    avatarContainer: {
-        alignItems: 'center',
-        marginBottom: scale(SPACING.md),
-    },
-    avatar: {
-        width: scale(90),
-        height: scale(90),
-        borderRadius: scale(45),
-        backgroundColor: COLORS.bgPrimary,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 3,
-        borderColor: COLORS.accent,
-        shadowColor: COLORS.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.4,
-        shadowRadius: 10,
-    },
-    avatarEmoji: {
-        fontSize: moderateScale(40),
-    },
-    roleBadge: {
-        marginTop: scale(-12),
-        backgroundColor: COLORS.accent,
-        paddingHorizontal: scale(SPACING.md),
-        paddingVertical: scale(4),
-        borderRadius: RADIUS.full,
-    },
-    roleBadgeText: {
-        color: '#fff',
-        fontSize: moderateScale(FONTS.sizes.xs),
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    userName: {
-        fontSize: moderateScale(FONTS.sizes.xxl),
-        fontWeight: '800',
-        color: COLORS.textPrimary,
-        marginBottom: scale(4),
-    },
-    userEmail: {
-        fontSize: moderateScale(FONTS.sizes.sm),
-        color: COLORS.textMuted,
-        marginBottom: scale(SPACING.lg),
-    },
-    statsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
+    eliteHeaderContainer: {
         width: '100%',
+        zIndex: 10,
     },
-    statItem: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    statValue: {
-        fontSize: moderateScale(FONTS.sizes.lg),
-        fontWeight: '800',
-        color: COLORS.accent,
-    },
-    statLabel: {
-        fontSize: moderateScale(FONTS.sizes.xs),
-        color: COLORS.textMuted,
-        marginTop: scale(4),
-    },
-    statDivider: {
-        width: 1,
-        height: scale(30),
-        backgroundColor: COLORS.border,
-        marginHorizontal: scale(SPACING.sm),
-    },
-    section: {
-        backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.lg,
-        padding: scale(SPACING.lg),
-        marginBottom: scale(SPACING.md),
+    headerGradient: {
+        paddingBottom: scale(40),
+        borderBottomLeftRadius: scale(40),
+        borderBottomRightRadius: scale(40),
         borderWidth: 1,
-        borderColor: COLORS.borderLight,
+        borderColor: 'rgba(255,255,255,0.05)',
     },
-    sectionHeader: {
+    headerTopRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: scale(SPACING.md),
+        paddingHorizontal: 20,
+        height: 60,
     },
-    sectionTitle: {
-        fontSize: moderateScale(FONTS.sizes.lg),
-        fontWeight: '700',
-        color: COLORS.textPrimary,
-    },
-    editBtn: {
-        fontSize: moderateScale(FONTS.sizes.sm),
-        color: COLORS.accent,
-        fontWeight: '600',
-    },
-    cancelEditBtn: {
-        fontSize: moderateScale(FONTS.sizes.sm),
-        color: COLORS.error,
-        fontWeight: '600',
-    },
-    infoRow: {
-        paddingVertical: scale(SPACING.sm),
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.borderLight,
-    },
-    infoLabel: {
-        fontSize: moderateScale(FONTS.sizes.xs),
-        color: COLORS.textMuted,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-        marginBottom: scale(4),
-    },
-    infoValue: {
-        fontSize: moderateScale(FONTS.sizes.md),
-        color: COLORS.textPrimary,
-        fontWeight: '500',
-    },
-    infoInput: {
-        fontSize: moderateScale(FONTS.sizes.md),
-        color: COLORS.textPrimary,
-        fontWeight: '500',
-        borderBottomWidth: 2,
-        borderBottomColor: COLORS.accent,
-        paddingVertical: scale(4),
-    },
-    saveBtn: {
-        backgroundColor: COLORS.accent,
-        borderRadius: RADIUS.md,
-        paddingVertical: scale(SPACING.md),
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: scale(SPACING.lg),
     },
-    saveBtnText: {
-        color: '#fff',
-        fontSize: moderateScale(FONTS.sizes.md),
-        fontWeight: '700',
+    headerTitle: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '900',
+        letterSpacing: 3,
     },
-    vehicleCard: {
-        flexDirection: 'row',
+    editIconBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: COLORS.bgPrimary,
-        borderRadius: RADIUS.md,
-        padding: scale(SPACING.md),
-        marginTop: scale(SPACING.sm),
-        gap: scale(SPACING.md),
     },
-    vehicleEmoji: {
-        fontSize: moderateScale(36),
+    profileHero: {
+        alignItems: 'center',
+        marginTop: 20,
     },
-    vehicleInfo: {
-        flex: 1,
+    avatarWrapper: {
+        width: 120,
+        height: 120,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    vehicleName: {
-        fontSize: moderateScale(FONTS.sizes.lg),
-        fontWeight: '700',
-        color: COLORS.textPrimary,
+    avatarGlow: {
+        position: 'absolute',
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: '#FFD600',
+        opacity: 0.1,
     },
-    vehicleDetail: {
-        fontSize: moderateScale(FONTS.sizes.sm),
-        color: COLORS.textSecondary,
-        marginTop: scale(2),
+    avatarMain: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#111',
+        borderWidth: 2,
+        borderColor: '#FFD600',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 20,
+        shadowColor: '#FFD600',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
     },
-    plateBadge: {
-        backgroundColor: COLORS.accent + '22',
-        alignSelf: 'flex-start',
-        paddingHorizontal: scale(SPACING.sm),
-        paddingVertical: scale(3),
-        borderRadius: RADIUS.sm,
-        marginTop: scale(SPACING.xs),
+    avatarEmoji: {
+        fontSize: 40,
+    },
+    onlineBadge: {
+        position: 'absolute',
+        bottom: 15,
+        right: 15,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#4CAF50',
+        borderWidth: 3,
+        borderColor: '#000',
+    },
+    heroName: {
+        color: '#FFF',
+        fontSize: 24,
+        fontWeight: '900',
+        marginTop: 15,
+    },
+    roleTag: {
+        backgroundColor: 'rgba(255,214,0,0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginTop: 8,
         borderWidth: 1,
-        borderColor: COLORS.accent,
+        borderColor: 'rgba(255,214,0,0.3)',
     },
-    plateText: {
-        fontSize: moderateScale(FONTS.sizes.md),
-        fontWeight: '800',
-        color: COLORS.accent,
+    roleTagText: {
+        color: '#FFD600',
+        fontSize: 10,
+        fontWeight: '900',
         letterSpacing: 2,
     },
-    actionItem: {
+    statsGrid: {
+        flexDirection: 'row',
+        paddingHorizontal: 20,
+        marginTop: -30,
+        gap: 12,
+    },
+    statBox: {
+        flex: 1,
+        backgroundColor: '#111',
+        borderRadius: 20,
+        padding: 15,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
+        elevation: 10,
+    },
+    statValue: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: '900',
+    },
+    statLabel: {
+        color: '#555',
+        fontSize: 10,
+        fontWeight: '700',
+        marginTop: 4,
+        textTransform: 'uppercase',
+    },
+    sectionContainer: {
+        paddingHorizontal: 20,
+        marginTop: 30,
+    },
+    sectionHeadline: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '900',
+        marginBottom: 20,
+        letterSpacing: 1,
+    },
+    inputGroup: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: scale(SPACING.md),
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.borderLight,
-        gap: scale(SPACING.md),
+        backgroundColor: '#0A0A0A',
+        padding: 15,
+        borderRadius: 15,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.03)',
     },
-    actionIcon: {
-        fontSize: moderateScale(22),
-    },
-    actionText: {
+    inputWrapper: {
         flex: 1,
-        fontSize: moderateScale(FONTS.sizes.md),
-        color: COLORS.textPrimary,
-        fontWeight: '500',
+        marginLeft: 15,
     },
-    actionArrow: {
-        fontSize: moderateScale(22),
-        color: COLORS.textMuted,
+    inputLabel: {
+        color: '#444',
+        fontSize: 9,
+        fontWeight: '900',
+        letterSpacing: 1,
+        marginBottom: 4,
     },
-    logoutAction: {
-        borderBottomWidth: 0,
+    eliteInput: {
+        color: '#FFD600',
+        fontSize: 16,
+        fontWeight: '700',
+        padding: 0,
     },
-    logoutText: {
-        color: COLORS.error,
+    readOnlyValue: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: '600',
     },
+    vanguardSaveBtn: {
+        backgroundColor: '#FFD600',
+        height: 55,
+        borderRadius: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 10,
+        elevation: 8,
+    },
+    saveText: {
+        color: '#000',
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    vanguardCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0A0A0A',
+        padding: 15,
+        borderRadius: 20,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.02)',
+    },
+    cardIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    cardContent: {
+        flex: 1,
+    },
+    cardMain: {
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '800',
+    },
+    cardSub: {
+        color: '#555',
+        fontSize: 11,
+        marginTop: 2,
+    },
+    logoutCard: {
+        marginTop: 10,
+        borderColor: 'rgba(244,67,54,0.1)',
+    }
 });
