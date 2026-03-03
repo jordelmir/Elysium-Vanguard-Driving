@@ -54,16 +54,17 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        height: height * 0.5, // Altura máxima estricta (50% de la pantalla)
-        zIndex: 30, // Capa 3
-        borderTopLeftRadius: 30,
-        borderTopRightRadius: 30,
+        height: height * 0.4, // RESTRICTED: Máximo 40% de la pantalla según Orden Maestra
+        zIndex: 50, // Superior al mapa y controles, pero inferior al Dropdown de búsqueda
+        borderTopLeftRadius: 25,
+        borderTopRightRadius: 25,
         overflow: 'hidden',
+        backgroundColor: '#0A0A0A', // Fondo sólido oscuro para mejor contraste
     },
     glass: {
         flex: 1,
         borderTopWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
+        borderColor: 'rgba(255,255,255,0.1)',
     },
     handleWrapper: {
         paddingVertical: 15,
