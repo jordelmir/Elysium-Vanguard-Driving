@@ -146,9 +146,9 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#000',
-        borderRadius: 12,
+        borderRadius: 15,
         paddingHorizontal: 15,
-        height: 55, // 15% más grande según pedido
+        height: 50, // Refined L7 height
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
     },
@@ -163,11 +163,11 @@ const styles = StyleSheet.create({
     },
     resultsOverlay: {
         position: 'absolute',
-        top: 65,
-        left: -15, // Compensa el padding del contenedor superior
+        top: 60, // Bajar un poco para alinear con el nuevo alto
+        left: -15,
         right: -15,
         width: width,
-        height: height * 0.8, // Dropdown profesional que cubre casi todo el mapa
+        height: height * 0.8,
         backgroundColor: '#0A0A0A',
         zIndex: 5000,
         paddingTop: 10,

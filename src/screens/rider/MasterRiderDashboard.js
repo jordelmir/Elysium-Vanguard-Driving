@@ -142,25 +142,52 @@ const MasterRiderDashboard = () => {
         },
     });
 
-    // Inyectar Zoom Táctil Pro en el Mapa y ocultar controles nativos
+    // Inyectar Zoom Táctil Pro en el Mapa y ocultar controles nativos (FORCED L7)
     const pinchToZoomJS = `
-        const meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        
-        // Estilos para ocultar controles nativos y attribution
-        const style = document.createElement('style');
-        style.innerHTML = '.leaflet-control-zoom, .leaflet-control-attribution, .leaflet-control-locate { display: none !important; }';
-        document.head.appendChild(style);
+        (function() {
+            const meta = document.createElement('meta');
+            meta.name = 'viewport';
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
+            document.getElementsByTagName('head')[0].appendChild(meta);
+            
+            // Estilos AGRESIVOS para ocultar controles nativos y attribution
+            const style = document.createElement('style');
+            style.innerHTML = \`
+                .leaflet-control-zoom, 
+                .leaflet-control-attribution, 
+                .leaflet-control-locate,
+                .leaflet-top.leaflet-left,
+                .leaflet-bottom.leaflet-right,
+                .leaflet-control { 
+                    display: none !important; 
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                    pointer-events: none !important;
+                }
+            \`;
+            document.head.appendChild(style);
 
-        window.L.Map.addInitHook(function() {
-            this.touchZoom.enable();
-            this.doubleClickZoom.enable();
-            this.boxZoom.enable();
-            this.zoomControl.remove();
-            console.log("Elite Map Gestures Enabled & Native Controls Hidden");
-        });
+            function cleanMap() {
+                const controls = document.querySelectorAll('.leaflet-control');
+                controls.forEach(c => {
+                    c.style.display = 'none';
+                    c.style.visibility = 'hidden';
+                });
+            }
+
+            window.L.Map.addInitHook(function() {
+                this.touchZoom.enable();
+                this.doubleClickZoom.enable();
+                this.boxZoom.enable();
+                if (this.zoomControl) this.zoomControl.remove();
+                cleanMap();
+                console.log("Elite Map Gestures Enabled & Native Controls Killed");
+            });
+            
+            // Re-intento de limpieza por si el Hook falla
+            setTimeout(cleanMap, 1000);
+            setTimeout(cleanMap, 3000);
+        })();
         true;
     `;
 
@@ -200,32 +227,34 @@ const MasterRiderDashboard = () => {
                     </TouchableOpacity>
 
                     <View style={styles.searchStack}>
-                        <LocationSearch
-                            placeholder={searchType === 'pickup' ? "Punto de Recogida (A)" : "¿A dónde vamos?"}
-                            icon={searchType === 'pickup' ? "pin" : "search"}
-                            iconColor={searchType === 'pickup' ? "#4CAF50" : "#FFD600"}
-                            onFocus={() => handleSearchFocus(searchType)}
-                            onLocationSelect={handleLocationSelect}
-                            autoFocus={isSearching}
-                        />
+                        <View style={styles.searchWrapper}>
+                            <LocationSearch
+                                placeholder={searchType === 'pickup' ? "Punto de Recogida (A)" : "¿A dónde vamos?"}
+                                icon={searchType === 'pickup' ? "pin" : "search"}
+                                iconColor={searchType === 'pickup' ? "#4CAF50" : "#FFD600"}
+                                onFocus={() => handleSearchFocus(searchType)}
+                                onLocationSelect={handleLocationSelect}
+                                autoFocus={isSearching}
+                            />
 
-                        {/* Controles de Mapa Horizontales (Surgical Fix L7+) */}
-                        {!isSearching && (
-                            <Animated.View style={[styles.horizontalControls, mapControlsStyle]}>
-                                <View style={styles.hControlGroup}>
-                                    <TouchableOpacity style={styles.hButton}>
-                                        <Ionicons name="add" size={20} color="#FFF" />
+                            {/* Controles de Mapa Horizontales (Surgical Fix L7+) */}
+                            {!isSearching && (
+                                <Animated.View style={[styles.horizontalControls, mapControlsStyle]}>
+                                    <View style={styles.hControlGroup}>
+                                        <TouchableOpacity style={styles.hButton}>
+                                            <Ionicons name="add" size={20} color="#FFF" />
+                                        </TouchableOpacity>
+                                        <View style={styles.hDivider} />
+                                        <TouchableOpacity style={styles.hButton}>
+                                            <Ionicons name="remove" size={20} color="#FFF" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <TouchableOpacity style={styles.hGpsButton}>
+                                        <Ionicons name="locate" size={20} color="#000" />
                                     </TouchableOpacity>
-                                    <View style={styles.hDivider} />
-                                    <TouchableOpacity style={styles.hButton}>
-                                        <Ionicons name="remove" size={20} color="#FFF" />
-                                    </TouchableOpacity>
-                                </View>
-                                <TouchableOpacity style={styles.hGpsButton}>
-                                    <Ionicons name="locate" size={20} color="#000" />
-                                </TouchableOpacity>
-                            </Animated.View>
-                        )}
+                                </Animated.View>
+                            )}
+                        </View>
                     </View>
                 </View>
 
@@ -350,7 +379,14 @@ const styles = StyleSheet.create({
     },
     searchStack: {
         flex: 1,
-        elevation: 10,
+        zIndex: 1000,
+    },
+    searchWrapper: {
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        borderRadius: 20,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.05)',
     },
     locationChips: {
         flexDirection: 'row',
