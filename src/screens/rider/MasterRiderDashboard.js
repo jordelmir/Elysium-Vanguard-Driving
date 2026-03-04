@@ -73,11 +73,10 @@ const MasterRiderDashboard = () => {
         return () => backHandler.remove();
     }, [isSearching, lastBackPressed, destination]);
 
-    // ESTILOS ANIMADOS (Controles del mapa en barra lateral derecha)
+    // ESTILOS ANIMADOS (Opcional si se requiere opacidad u otros efectos)
     const mapControlsStyle = useAnimatedStyle(() => {
-        const sheetVisibleHeight = Math.max(0, height - panelY.value);
         return {
-            bottom: withSpring(sheetVisibleHeight + 40, { damping: 15 }),
+            opacity: withSpring(isSearching ? 0 : 1, { damping: 20 }),
         };
     });
 
@@ -209,6 +208,24 @@ const MasterRiderDashboard = () => {
                             onLocationSelect={handleLocationSelect}
                             autoFocus={isSearching}
                         />
+
+                        {/* Controles de Mapa Horizontales (Surgical Fix L7+) */}
+                        {!isSearching && (
+                            <Animated.View style={[styles.horizontalControls, mapControlsStyle]}>
+                                <View style={styles.hControlGroup}>
+                                    <TouchableOpacity style={styles.hButton}>
+                                        <Ionicons name="add" size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                    <View style={styles.hDivider} />
+                                    <TouchableOpacity style={styles.hButton}>
+                                        <Ionicons name="remove" size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+                                <TouchableOpacity style={styles.hGpsButton}>
+                                    <Ionicons name="locate" size={20} color="#000" />
+                                </TouchableOpacity>
+                            </Animated.View>
+                        )}
                     </View>
                 </View>
 
@@ -240,22 +257,7 @@ const MasterRiderDashboard = () => {
                 )}
             </SafeAreaView>
 
-            {/* Capa 2: Barra Lateral de Controles (Surgical Fix - Floating at center-right) */}
-            <Animated.View style={[styles.sidebarControls, mapControlsStyle]}>
-                <View style={[styles.controlGroup, { marginBottom: 10 }]}>
-                    <TouchableOpacity style={styles.sidebarButton}>
-                        <Ionicons name="add" size={24} color="#FFF" />
-                    </TouchableOpacity>
-                    <View style={styles.sidebarDivider} />
-                    <TouchableOpacity style={styles.sidebarButton}>
-                        <Ionicons name="remove" size={24} color="#FFF" />
-                    </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity style={[styles.sidebarButton, styles.gpsButton]}>
-                    <Ionicons name="locate" size={24} color="#000" />
-                </TouchableOpacity>
-            </Animated.View>
+            {/* Capa 2: Barra Lateral Eliminada para optimizar espacio (Movida a Capa 1) */}
 
             {/* Capa 3: Panel Inferior Desmonolizado con PanResponder */}
             <DynamicBottomSheet translateY={panelY} panHandlers={panResponder.panHandlers}>
@@ -380,42 +382,41 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '700',
     },
-    sidebarControls: {
-        position: 'absolute',
-        right: 20,
-        zIndex: 80,
+    horizontalControls: {
+        flexDirection: 'row',
+        marginTop: 10,
+        gap: 8,
         alignItems: 'center',
-        paddingVertical: 10,
     },
-    controlGroup: {
+    hControlGroup: {
+        flexDirection: 'row',
         backgroundColor: 'rgba(10,10,10,0.95)',
-        borderRadius: 15,
+        borderRadius: 12,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
         elevation: 5,
+        overflow: 'hidden',
     },
-    sidebarButton: {
-        width: 48,
-        height: 48,
+    hButton: {
+        width: 40,
+        height: 40,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    sidebarDivider: {
-        height: 1,
+    hDivider: {
+        width: 1,
+        height: '60%',
         backgroundColor: 'rgba(255,255,255,0.1)',
-        width: '60%',
         alignSelf: 'center',
     },
-    gpsButton: {
+    hGpsButton: {
+        width: 40,
+        height: 40,
         backgroundColor: '#FFD600',
-        borderRadius: 15,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
         elevation: 5,
-    },
-    mapTypeButton: {
-        backgroundColor: 'rgba(10,10,10,0.95)',
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
     },
     sheetHeader: {
         flexDirection: 'row',
