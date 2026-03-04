@@ -31,9 +31,13 @@ const DynamicBottomSheet = ({ translateY, children, panHandlers }) => {
         <Animated.View style={[styles.container, animatedStyle]}>
             <BlurView intensity={95} tint="dark" style={styles.glass}>
                 <View {...panHandlers} style={styles.handleWrapper}>
-                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.dragHandle} />
-                    </TouchableWithoutFeedback>
+                    <View style={styles.dragHandle} />
+                    {/* Indicador visual para invitativo al deslizamiento */}
+                    <View style={styles.peekHint}>
+                        <View style={styles.hintDot} />
+                        <View style={[styles.hintDot, { opacity: 0.5 }]} />
+                        <View style={[styles.hintDot, { opacity: 0.2 }]} />
+                    </View>
                 </View>
                 <ScrollView
                     style={styles.scroll}
@@ -54,12 +58,12 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        height: height * 0.45, // Incrementado ligeramente para evitar recortes en la base
+        height: height * 0.85, // Scroll Total - Expandible hasta casi arriba
         zIndex: 50,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
         overflow: 'hidden',
-        backgroundColor: '#050505', // Aún más oscuro para elegancia máxima
+        backgroundColor: '#050505',
     },
     glass: {
         flex: 1,
@@ -67,16 +71,27 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.1)',
     },
     handleWrapper: {
-        paddingVertical: 15,
+        paddingTop: 10,
+        paddingBottom: 25, // Mayor área para deslizar
         alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.02)', // Sutil diferencia táctil
     },
     dragHandle: {
-        width: 45,
-        height: 5,
-        backgroundColor: 'rgba(255,255,255,0.3)',
-        borderRadius: 3,
-        alignSelf: 'center',
-        marginBottom: 10,
+        width: 40,
+        height: 4,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 2,
+        marginBottom: 8,
+    },
+    peekHint: {
+        flexDirection: 'row',
+        gap: 4,
+    },
+    hintDot: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#FFF',
     },
     scroll: {
         flex: 1,

@@ -31,13 +31,15 @@ import DynamicBottomSheet from '../../components/DynamicBottomSheet';
 
 const { height, width } = Dimensions.get('window');
 
-/**
- * MasterRiderDashboard - Versión Elite L7+ (Elysium Final)
- * Solución integral a superposiciones, flujo bloqueado y navegación nativa.
- */
+// CONSTANTES DE CAJÓN (DRAWER) L7+
+const DRAWER_PEEK = height * 0.88; // Estado de "asomo" (hint)
+const DRAWER_MID = height * 0.6;   // Estado medio (por defecto al seleccionar)
+const DRAWER_FULL = height * 0.25;  // Estado expandido (scroll total)
+const DRAWER_HIDDEN = height;      // Oculto (durante búsqueda)
+
 const MasterRiderDashboard = () => {
     // ESTADOS DE UI
-    const panelY = useSharedValue(height);
+    const panelY = useSharedValue(DRAWER_PEEK);
     const [isSearching, setIsSearching] = useState(false);
     const [searchType, setSearchType] = useState('destination'); // 'pickup' o 'destination'
     const [lastBackPressed, setLastBackPressed] = useState(0);
@@ -51,7 +53,7 @@ const MasterRiderDashboard = () => {
         const backAction = () => {
             if (isSearching) {
                 setIsSearching(false);
-                panelY.value = withSpring(destination ? height * 0.6 : height, { damping: 20 });
+                panelY.value = withSpring(destination ? DRAWER_MID : DRAWER_PEEK, { damping: 20 });
                 return true;
             }
 
@@ -82,7 +84,7 @@ const MasterRiderDashboard = () => {
     const handleSearchFocus = (type) => {
         setSearchType(type);
         setIsSearching(true);
-        panelY.value = withSpring(height, { damping: 20 });
+        panelY.value = withSpring(DRAWER_HIDDEN, { damping: 20 });
     };
 
     const handleLocationSelect = (loc) => {
@@ -97,29 +99,45 @@ const MasterRiderDashboard = () => {
         }
 
         setIsSearching(false);
-        panelY.value = withSpring(height * 0.6, { damping: 15 });
+        panelY.value = withSpring(DRAWER_MID, { damping: 15 });
     };
 
-    // INGENIERÍA DE GESTOS: PanResponder para expansión/colapso
+    // INGENIERÍA DE GESTOS: PanResponder Pro (Deslizamiento Global)
     const panResponder = PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+            // Capturar gesto si hay un movimiento vertical significativo
+            return Math.abs(gestureState.dy) > 10;
+        },
         onPanResponderMove: (_, gestureState) => {
-            // Permitir arrastre manual (limitado)
-            const newVal = panelY.value + gestureState.dy * 0.5;
-            if (newVal > height * 0.1 && newVal < height) {
+            const newVal = panelY.value + gestureState.dy * 0.8;
+            // Límites estrictos
+            if (newVal > DRAWER_FULL && newVal < DRAWER_HIDDEN) {
                 panelY.value = newVal;
             }
         },
         onPanResponderRelease: (_, gestureState) => {
-            if (gestureState.dy < -50) {
-                // Deslizar arriba -> Expandir (Máximo 30% desde arriba)
-                panelY.value = withSpring(height * 0.3, { damping: 20 });
-            } else if (gestureState.dy > 50) {
-                // Deslizar abajo -> Colapsar (60% desde arriba)
-                panelY.value = withSpring(height * 0.6, { damping: 20 });
+            const { dy, vy } = gestureState;
+
+            // Lógica basada en velocidad (vy) y posición final
+            if (vy < -0.5 || dy < -100) {
+                // Hacia arriba -> Siguiente estado
+                const target = panelY.value > DRAWER_MID ? DRAWER_MID : DRAWER_FULL;
+                panelY.value = withSpring(target, { damping: 20 });
+            } else if (vy > 0.5 || dy > 100) {
+                // Hacia abajo -> Estado anterior
+                const target = panelY.value < DRAWER_MID ? DRAWER_MID : DRAWER_PEEK;
+                panelY.value = withSpring(target, { damping: 20 });
             } else {
-                // Volver al estado actual más cercano
-                const target = panelY.value < height * 0.45 ? height * 0.3 : height * 0.6;
+                // Snap al punto más cercano
+                const diffPeek = Math.abs(panelY.value - DRAWER_PEEK);
+                const diffMid = Math.abs(panelY.value - DRAWER_MID);
+                const diffFull = Math.abs(panelY.value - DRAWER_FULL);
+
+                let target = DRAWER_PEEK;
+                if (diffMid < diffPeek && diffMid < diffFull) target = DRAWER_MID;
+                else if (diffFull < diffPeek && diffFull < diffMid) target = DRAWER_FULL;
+
                 panelY.value = withSpring(target, { damping: 20 });
             }
         },
