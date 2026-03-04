@@ -125,17 +125,24 @@ const MasterRiderDashboard = () => {
         },
     });
 
-    // Inyectar Zoom Táctil Pro en el Mapa
+    // Inyectar Zoom Táctil Pro en el Mapa y ocultar controles nativos
     const pinchToZoomJS = `
         const meta = document.createElement('meta');
         meta.name = 'viewport';
         meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
         document.getElementsByTagName('head')[0].appendChild(meta);
+        
+        // Estilos para ocultar controles nativos y attribution
+        const style = document.createElement('style');
+        style.innerHTML = '.leaflet-control-zoom, .leaflet-control-attribution, .leaflet-control-locate { display: none !important; }';
+        document.head.appendChild(style);
+
         window.L.Map.addInitHook(function() {
             this.touchZoom.enable();
             this.doubleClickZoom.enable();
             this.boxZoom.enable();
-            console.log("Elite Map Gestures Enabled");
+            this.zoomControl.remove();
+            console.log("Elite Map Gestures Enabled & Native Controls Hidden");
         });
         true;
     `;
@@ -147,7 +154,7 @@ const MasterRiderDashboard = () => {
         >
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Capa 0: El Mapa */}
+            {/* Capa 0: El Mapa (Totalmente limpio de controles nativos) */}
             <View style={styles.mapContainer}>
                 <LeafletView
                     doDebug={false}
@@ -162,6 +169,7 @@ const MasterRiderDashboard = () => {
                             attribution: '&copy; CartoDB',
                         }
                     ]}
+                    zoomControl={false}
                 />
             </View>
 
@@ -214,24 +222,20 @@ const MasterRiderDashboard = () => {
                 )}
             </SafeAreaView>
 
-            {/* Capa 2: Barra Lateral de Controles (Surgical Fix) */}
+            {/* Capa 2: Barra Lateral de Controles (Surgical Fix - Floating at center-right) */}
             <Animated.View style={[styles.sidebarControls, mapControlsStyle]}>
-                <View style={styles.controlGroup}>
+                <View style={[styles.controlGroup, { marginBottom: 10 }]}>
                     <TouchableOpacity style={styles.sidebarButton}>
-                        <Ionicons name="add" size={22} color="#FFF" />
+                        <Ionicons name="add" size={24} color="#FFF" />
                     </TouchableOpacity>
                     <View style={styles.sidebarDivider} />
                     <TouchableOpacity style={styles.sidebarButton}>
-                        <Ionicons name="remove" size={22} color="#FFF" />
+                        <Ionicons name="remove" size={24} color="#FFF" />
                     </TouchableOpacity>
                 </View>
 
                 <TouchableOpacity style={[styles.sidebarButton, styles.gpsButton]}>
-                    <Ionicons name="locate" size={22} color="#000" />
-                </TouchableOpacity>
-
-                <TouchableOpacity style={[styles.sidebarButton, styles.mapTypeButton]}>
-                    <Ionicons name="map" size={20} color="#FFF" />
+                    <Ionicons name="locate" size={24} color="#000" />
                 </TouchableOpacity>
             </Animated.View>
 
@@ -360,10 +364,10 @@ const styles = StyleSheet.create({
     },
     sidebarControls: {
         position: 'absolute',
-        right: 15,
+        right: 20,
         zIndex: 80,
         alignItems: 'center',
-        gap: 12,
+        paddingVertical: 10,
     },
     controlGroup: {
         backgroundColor: 'rgba(10,10,10,0.95)',

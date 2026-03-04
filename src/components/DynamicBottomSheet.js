@@ -54,12 +54,12 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 0,
         width: '100%',
-        height: height * 0.4, // RESTRICTED: Máximo 40% de la pantalla según Orden Maestra
-        zIndex: 50, // Superior al mapa y controles, pero inferior al Dropdown de búsqueda
-        borderTopLeftRadius: 25,
-        borderTopRightRadius: 25,
+        height: height * 0.45, // Incrementado ligeramente para evitar recortes en la base
+        zIndex: 50,
+        borderTopLeftRadius: 30,
+        borderTopRightRadius: 30,
         overflow: 'hidden',
-        backgroundColor: '#0A0A0A', // Fondo sólido oscuro para mejor contraste
+        backgroundColor: '#050505', // Aún más oscuro para elegancia máxima
     },
     glass: {
         flex: 1,
