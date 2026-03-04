@@ -19,7 +19,7 @@ const { height } = Dimensions.get('window');
  * DynamicBottomSheet - Panel inferior con límites de altura y scroll interno
  * Diseñado para colapsar suavemente con el teclado sin invadir el header.
  */
-const DynamicBottomSheet = ({ translateY, children }) => {
+const DynamicBottomSheet = ({ translateY, children, panHandlers }) => {
 
     const animatedStyle = useAnimatedStyle(() => {
         return {
@@ -30,11 +30,11 @@ const DynamicBottomSheet = ({ translateY, children }) => {
     return (
         <Animated.View style={[styles.container, animatedStyle]}>
             <BlurView intensity={95} tint="dark" style={styles.glass}>
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={styles.handleWrapper}>
+                <View {...panHandlers} style={styles.handleWrapper}>
+                    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                         <View style={styles.dragHandle} />
-                    </View>
-                </TouchableWithoutFeedback>
+                    </TouchableWithoutFeedback>
+                </View>
                 <ScrollView
                     style={styles.scroll}
                     contentContainerStyle={styles.scrollContent}

@@ -11,14 +11,16 @@ import {
     Platform,
     TextInput,
     BackHandler,
-    ToastAndroid
+    ToastAndroid,
+    PanResponder
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withSpring,
-    interpolate
+    interpolate,
+    runOnJS
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,10 +88,9 @@ const MasterRiderDashboard = () => {
     const handleLocationSelect = (loc) => {
         if (searchType === 'pickup') {
             setPickup(loc);
-            // DESBLOQUEO: Si no hay destino, pasar automáticamente a pedir destino
             if (!destination) {
                 setSearchType('destination');
-                return; // Mantener búsqueda abierta para el destino
+                return;
             }
         } else {
             setDestination(loc);
@@ -98,6 +99,46 @@ const MasterRiderDashboard = () => {
         setIsSearching(false);
         panelY.value = withSpring(height * 0.6, { damping: 15 });
     };
+
+    // INGENIERÍA DE GESTOS: PanResponder para expansión/colapso
+    const panResponder = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderMove: (_, gestureState) => {
+            // Permitir arrastre manual (limitado)
+            const newVal = panelY.value + gestureState.dy * 0.5;
+            if (newVal > height * 0.1 && newVal < height) {
+                panelY.value = newVal;
+            }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+            if (gestureState.dy < -50) {
+                // Deslizar arriba -> Expandir (Máximo 30% desde arriba)
+                panelY.value = withSpring(height * 0.3, { damping: 20 });
+            } else if (gestureState.dy > 50) {
+                // Deslizar abajo -> Colapsar (60% desde arriba)
+                panelY.value = withSpring(height * 0.6, { damping: 20 });
+            } else {
+                // Volver al estado actual más cercano
+                const target = panelY.value < height * 0.45 ? height * 0.3 : height * 0.6;
+                panelY.value = withSpring(target, { damping: 20 });
+            }
+        },
+    });
+
+    // Inyectar Zoom Táctil Pro en el Mapa
+    const pinchToZoomJS = `
+        const meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        window.L.Map.addInitHook(function() {
+            this.touchZoom.enable();
+            this.doubleClickZoom.enable();
+            this.boxZoom.enable();
+            console.log("Elite Map Gestures Enabled");
+        });
+        true;
+    `;
 
     return (
         <KeyboardAvoidingView
@@ -109,6 +150,8 @@ const MasterRiderDashboard = () => {
             {/* Capa 0: El Mapa */}
             <View style={styles.mapContainer}>
                 <LeafletView
+                    doDebug={false}
+                    injectedJavaScript={pinchToZoomJS}
                     mapLayers={[
                         {
                             baseLayerName: 'CartoDB Dark',
@@ -192,8 +235,8 @@ const MasterRiderDashboard = () => {
                 </TouchableOpacity>
             </Animated.View>
 
-            {/* Capa 3: Panel Inferior Desmonolizado */}
-            <DynamicBottomSheet translateY={panelY}>
+            {/* Capa 3: Panel Inferior Desmonolizado con PanResponder */}
+            <DynamicBottomSheet translateY={panelY} panHandlers={panResponder.panHandlers}>
                 <View style={styles.sheetHeader}>
                     <Text style={styles.sheetTitle}>VIAJE SELECCIONADO</Text>
                     <View style={styles.priceTag}>
