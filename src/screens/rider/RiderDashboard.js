@@ -37,7 +37,7 @@ export default function RiderDashboard({ navigation }) {
     const [destination, setDestination] = useState(null);
     const [destinationName, setDestinationName] = useState('');
     const [stops, setStops] = useState([]); // Array of { latitude, longitude, name }
-    const [activeSearchIndex, setActiveSearchIndex] = useState(-1); // -1 = destination, 0,1,2... = stop
+    const [activeSearchIndex, setActiveSearchIndex] = useState(-1); // -1: destination, -2: pickup, 0..n: stops
     const [pickupName, setPickupName] = useState('');
     const [selectedPrice, setSelectedPrice] = useState(0);
     const [customPrice, setCustomPrice] = useState('');
@@ -52,7 +52,7 @@ export default function RiderDashboard({ navigation }) {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isMapPickerMode, setIsMapPickerMode] = useState(false);
-    const [mapZoom, setMapZoom] = useState(14);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [routeCoordinates, setRouteCoordinates] = useState([]);
     const [routeInfo, setRouteInfo] = useState({ distance: 0, duration: 0 });
     const progressAnim = useRef(new Animated.Value(0)).current;
@@ -598,7 +598,12 @@ if (window.map) {
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 onFocus={() => {
+                                    setIsSearchFocused(true);
                                     if (!showPanel) togglePanel();
+                                }}
+                                onBlur={() => {
+                                    // Delay to let selection happen
+                                    setTimeout(() => setIsSearchFocused(false), 200);
                                 }}
                             />
                             {searchQuery.length > 0 && (
@@ -610,51 +615,56 @@ if (window.map) {
                             )}
                         </View>
 
-                        {/* Controles de Mapa Horizontales (Surgical Fix L7+) */}
-                        <View style={styles.horizontalControls}>
-                            <View style={styles.hControlGroup}>
+                        {/* Controles de Mapa Horizontales (Surgical Fix L7+) - Hidden when focused */}
+                        {!(isSearchFocused || searchQuery.length > 0) && (
+                            <View style={styles.horizontalControls}>
+                                <View style={styles.hControlGroup}>
+                                    <TouchableOpacity
+                                        style={styles.hButton}
+                                        onPress={() => {
+                                            const nextZoom = Math.min(mapZoom + 1, 19);
+                                            setMapZoom(nextZoom);
+                                            mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                        }}
+                                    >
+                                        <Text style={styles.hButtonText}>+</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.hDivider} />
+                                    <TouchableOpacity
+                                        style={styles.hButton}
+                                        onPress={() => {
+                                            const nextZoom = Math.max(mapZoom - 1, 5);
+                                            setMapZoom(nextZoom);
+                                            mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                        }}
+                                    >
+                                        <Text style={styles.hButtonText}>−</Text>
+                                    </TouchableOpacity>
+                                </View>
                                 <TouchableOpacity
-                                    style={styles.hButton}
-                                    onPress={() => {
-                                        const nextZoom = Math.min(mapZoom + 1, 19);
-                                        setMapZoom(nextZoom);
-                                        mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                    style={styles.hGpsButton}
+                                    onPress={async () => {
+                                        try {
+                                            const loc = await getCurrentLocation();
+                                            setMyLocation(loc);
+                                            if (mapRef.current) {
+                                                mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16); `);
+                                            }
+                                        } catch (error) {
+                                            Alert.alert('Error', 'No se pudo obtener la ubicación');
+                                        }
                                     }}
                                 >
-                                    <Text style={styles.hButtonText}>+</Text>
-                                </TouchableOpacity>
-                                <View style={styles.hDivider} />
-                                <TouchableOpacity
-                                    style={styles.hButton}
-                                    onPress={() => {
-                                        const nextZoom = Math.max(mapZoom - 1, 5);
-                                        setMapZoom(nextZoom);
-                                        mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
-                                    }}
-                                >
-                                    <Text style={styles.hButtonText}>−</Text>
+                                    <Text style={{ fontSize: moderateScale(20) }}>🎯</Text>
                                 </TouchableOpacity>
                             </View>
-                            <TouchableOpacity
-                                style={styles.hGpsButton}
-                                onPress={async () => {
-                                    try {
-                                        const loc = await getCurrentLocation();
-                                        setMyLocation(loc);
-                                        if (mapRef.current) {
-                                            mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16); `);
-                                        }
-                                    } catch (error) {
-                                        Alert.alert('Error', 'No se pudo obtener la ubicación');
-                                    }
-                                }}
-                            >
-                                <Text style={{ fontSize: moderateScale(20) }}>🎯</Text>
-                            </TouchableOpacity>
-                        </View>
+                        )}
 
-                        {(searchResults.length > 0 || activeSearchIndex === -2) && (
-                            <Animated.View style={[styles.resultsContainer, { opacity: slideAnim, maxHeight: 400 }]}>
+                        {(searchResults.length > 0 || activeSearchIndex === -2 || isSearchFocused) && (
+                            <Animated.View style={[styles.resultsContainer, { opacity: slideAnim, maxHeight: 500 }]}>
+                                {/* Dim Backdrop for results isolation */}
+                                <View style={styles.resultsIsolationBackdrop} pointerEvents="none" />
+
                                 {activeSearchIndex === -2 && (
                                     <TouchableOpacity
                                         style={styles.currentLocResult}
@@ -1563,27 +1573,51 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: scale(20),
     },
-    searchingEmoji: { fontSize: moderateScale(40) },
-    searchingTitle: { fontSize: moderateScale(22), fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: scale(10) },
-    resultAddress: { fontSize: moderateScale(11), color: COLORS.textMuted },
-
+    resultsContainer: {
+        position: 'absolute',
+        top: SAFE_TOP + scale(65),
+        left: scale(20),
+        right: scale(20),
+        backgroundColor: COLORS.bgCard,
+        borderRadius: RADIUS.lg,
+        padding: scale(SPACING.md),
+        borderWidth: 1,
+        borderColor: COLORS.accent + '40',
+        zIndex: 1000,
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.3,
+                shadowRadius: 15,
+            },
+            android: { elevation: 20 },
+        }),
+    },
+    resultsIsolationBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderRadius: RADIUS.lg,
+        zIndex: -1,
+    },
     currentLocResult: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: scale(SPACING.md),
-        backgroundColor: COLORS.neonBlue + '15',
+        padding: scale(12),
+        backgroundColor: COLORS.accent + '10',
         borderRadius: RADIUS.md,
         borderWidth: 1,
-        borderColor: COLORS.neonBlue + '30',
-        gap: scale(12),
+        borderColor: COLORS.accent + '30',
+        gap: scale(10),
+        marginBottom: scale(10),
     },
     currentLocTitle: {
-        fontSize: moderateScale(14),
-        fontWeight: '700',
-        color: COLORS.neonBlue,
+        fontSize: moderateScale(13),
+        fontWeight: 'bold',
+        color: COLORS.accent,
     },
     currentLocSubtitle: {
-        fontSize: moderateScale(11),
+        fontSize: moderateScale(10),
         color: COLORS.textMuted,
     },
     searchingSub: { fontSize: moderateScale(14), color: COLORS.textMuted, textAlign: 'center', marginBottom: scale(30) },
