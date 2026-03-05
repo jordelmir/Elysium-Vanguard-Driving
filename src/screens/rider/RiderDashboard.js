@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, Dimensions,
     StatusBar, TextInput, Modal, Alert, Animated, Platform, ScrollView,
-    KeyboardAvoidingView
+    KeyboardAvoidingView, BackHandler
 } from 'react-native';
 import { LeafletView } from 'react-native-leaflet-view';
 import { useAuth, calculateRatingPercentage } from '../../context/AuthContext';
@@ -26,6 +26,7 @@ export const CARTO_DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/
 export default function RiderDashboard({ navigation }) {
     const { user, userData, logout } = useAuth();
     const mapRef = useRef(null);
+    const searchInputRef = useRef(null);
     const slideAnim = useRef(new Animated.Value(0)).current;
 
     const [myLocation, setMyLocation] = useState(null); // Real GPS
@@ -103,6 +104,28 @@ export default function RiderDashboard({ navigation }) {
             if (subscription) subscription.remove();
         };
     }, []);
+
+    useEffect(() => {
+        const backAction = () => {
+            if (isMapPickerMode) {
+                setIsMapPickerMode(false);
+                if (!showPanel) togglePanel();
+                return true;
+            }
+            if (showPanel) {
+                togglePanel();
+                return true;
+            }
+            return false;
+        };
+
+        const backHandler = BackHandler.addEventListener(
+            "hardwareBackPress",
+            backAction
+        );
+
+        return () => backHandler.remove();
+    }, [isMapPickerMode, showPanel]);
 
     useEffect(() => {
         const q = query(collection(db, 'drivers'), where('isOnline', '==', true));
@@ -486,6 +509,19 @@ if (window.map) {
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
             >
 
+                {/* Overlay Manual Map Picker Back Button */}
+                {isMapPickerMode && (
+                    <TouchableOpacity
+                        style={styles.mapPickerBackBtn}
+                        onPress={() => {
+                            setIsMapPickerMode(false);
+                            if (!showPanel) togglePanel();
+                        }}
+                    >
+                        <Text style={styles.mapPickerBackText}>← Volver al Panel</Text>
+                    </TouchableOpacity>
+                )}
+
                 {myLocation && (
                     <View style={styles.map}>
                         <LeafletView
@@ -551,6 +587,7 @@ if (window.map) {
                         <View style={styles.searchInputWrapper}>
                             <Text style={{ fontSize: moderateScale(18), marginRight: 10 }}>🔍</Text>
                             <TextInput
+                                ref={searchInputRef}
                                 style={styles.searchInput}
                                 placeholder={
                                     activeSearchIndex === -2 ? "📍 ¿Dónde te recojo?" :
@@ -769,6 +806,8 @@ if (window.map) {
                                                 onPress={() => {
                                                     setActiveSearchIndex(-2); // -2 is manual pickup search
                                                     setSearchQuery('');
+                                                    if (!showPanel) togglePanel();
+                                                    setTimeout(() => searchInputRef.current?.focus(), 300);
                                                 }}
                                             >
                                                 <Text style={styles.stopActionEdit}>✏️</Text>
@@ -796,6 +835,8 @@ if (window.map) {
                                                         onPress={() => {
                                                             setActiveSearchIndex(index);
                                                             setSearchQuery('');
+                                                            if (!showPanel) togglePanel();
+                                                            setTimeout(() => searchInputRef.current?.focus(), 300);
                                                         }}
                                                     >
                                                         <Text style={styles.stopActionEdit}>✏️</Text>
@@ -1662,5 +1703,29 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         elevation: 5,
+    },
+    mapPickerBackBtn: {
+        position: 'absolute',
+        top: SAFE_TOP + scale(70),
+        left: scale(20),
+        backgroundColor: COLORS.bgCard,
+        paddingHorizontal: scale(20),
+        paddingVertical: scale(12),
+        borderRadius: RADIUS.pill,
+        borderWidth: 1,
+        borderColor: COLORS.neonBlue,
+        zIndex: 9999,
+        flexDirection: 'row',
+        alignItems: 'center',
+        shadowColor: COLORS.neonBlue,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 5,
+        elevation: 5,
+    },
+    mapPickerBackText: {
+        color: COLORS.neonBlue,
+        fontWeight: 'bold',
+        fontSize: moderateScale(14),
     },
 });
