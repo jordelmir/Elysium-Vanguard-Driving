@@ -744,28 +744,6 @@ if (window.map) {
                 )}
 
                 <View style={styles.bottomSection}>
-                    {!showPanel && !isMapPickerMode && (
-                        <TouchableOpacity
-                            style={[styles.recenterButton, { bottom: 20 }]}
-                            onPress={async () => {
-                                try {
-                                    const loc = await getCurrentLocation();
-                                    setMyLocation(loc);
-                                    if (mapRef.current) {
-                                        mapRef.current.injectJavaScript(`
-window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
-`);
-                                    }
-                                    const addr = await reverseGeocode(loc.latitude, loc.longitude);
-                                    setPickupName(addr);
-                                } catch (err) {
-                                    Alert.alert('GPS', 'No se pudo obtener la ubicación exacta');
-                                }
-                            }}
-                        >
-                            <Text style={{ fontSize: 24 }}>🎯</Text>
-                        </TouchableOpacity>
-                    )}
 
 
                     {!isMapPickerMode && (
