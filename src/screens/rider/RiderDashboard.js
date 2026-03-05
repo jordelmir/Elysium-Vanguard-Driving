@@ -119,20 +119,6 @@ export default function RiderDashboard({ navigation }) {
         return unsubscribe;
     }, []);
 
-    const handleMapMessage = async (message) => {
-        if (message.event === 'onMapClicked') {
-            if (showPanel && !isMapPickerMode) {
-                const { lat, lng } = message.payload;
-                updateDestination(lat, lng);
-            }
-        } else if (message.event === 'onMoveEnd' && isMapPickerMode) {
-            const { lat, lng } = message.payload;
-            if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
-                // Debounced/Buffered update for smooth tuning
-                updateDestination(lat, lng, true);
-            }
-        }
-    };
     const updateDestination = async (lat, lng, isSilent = false) => {
         const latitude = lat;
         const longitude = lng;
@@ -182,10 +168,10 @@ export default function RiderDashboard({ navigation }) {
                 if (mapRef.current && route.coordinates.length > 0) {
                     const bounds = route.coordinates.map(c => [c.lat, c.lng]);
                     mapRef.current.injectJavaScript(`
-                        if (window.map) {
-                            window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
-                        }
-                    `);
+if (window.map) {
+    window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
+}
+`);
                 }
             }
         }
@@ -200,6 +186,48 @@ export default function RiderDashboard({ navigation }) {
                 const newStops = [...stops];
                 newStops[activeSearchIndex] = { ...newStops[activeSearchIndex], name: details.address };
                 setStops(newStops);
+            }
+        }
+    };
+
+    // Inyectar Zoom Táctil Pro en el Mapa y ocultar controles nativos (FORCED L7)
+    const pinchToZoomJS = `
+    (function() {
+        const meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes';
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        const style = document.createElement('style');
+        style.innerHTML = '.leaflet-control-zoom, .leaflet-control-attribution, .leaflet-control-locate, .leaflet-top.leaflet-left, .leaflet-bottom.leaflet-right, .leaflet-control { display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }';
+        document.head.appendChild(style);
+        function cleanMap() {
+            const controls = document.querySelectorAll('.leaflet-control');
+            controls.forEach(c => { c.style.display = 'none'; c.style.visibility = 'hidden'; });
+        }
+        window.L.Map.addInitHook(function() {
+            this.touchZoom.enable();
+            this.doubleClickZoom.enable();
+            this.boxZoom.enable();
+            if (this.zoomControl) this.zoomControl.remove();
+            cleanMap();
+        });
+        setTimeout(cleanMap, 1000);
+        setTimeout(cleanMap, 3000);
+    })();
+    true;
+`;
+
+    const handleMapMessage = (message) => {
+        if (message.event === 'onMapClick' && isMapPickerMode) {
+            const { lat, lng } = message.payload;
+            if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+                updateDestination(lat, lng);
+            }
+        } else if (message.event === 'onMoveEnd' && isMapPickerMode) {
+            const { lat, lng } = message.payload;
+            if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+                // Debounced/Buffered update for smooth tuning
+                updateDestination(lat, lng, true);
             }
         }
     };
@@ -378,8 +406,8 @@ export default function RiderDashboard({ navigation }) {
 
         if (mapRef.current) {
             mapRef.current.injectJavaScript(`
-                window.map.flyTo([${item.latitude}, ${item.longitude}], 16);
-            `);
+window.map.flyTo([${item.latitude}, ${item.longitude}], 16);
+`);
         }
 
         if (myLocation) {
@@ -409,10 +437,10 @@ export default function RiderDashboard({ navigation }) {
                     if (mapRef.current && route.coordinates.length > 0) {
                         const bounds = route.coordinates.map(c => [c.lat, c.lng]);
                         mapRef.current.injectJavaScript(`
-                            if (window.map) {
-                                window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
-                            }
-                        `);
+if (window.map) {
+    window.map.fitBounds(${JSON.stringify(bounds)}, { padding: [50, 50] });
+}
+`);
                     }
 
                     const pricing = calculateSuggestedPrice(route.distance, route.duration);
@@ -463,6 +491,7 @@ export default function RiderDashboard({ navigation }) {
                         <LeafletView
                             ref={mapRef}
                             zoomControl={false}
+                            injectedJavaScript={pinchToZoomJS}
                             backgroundColor={COLORS.bgPrimary}
                             onMessageReceived={handleMapMessage}
                             mapLayers={[
@@ -486,20 +515,20 @@ export default function RiderDashboard({ navigation }) {
                                     size: [32, 32],
                                 },
                                 ...stops.filter(s => s.latitude && s.longitude).map((s, index) => ({
-                                    id: `stop-${index}`,
+                                    id: `stop - ${index} `,
                                     position: { lat: s.latitude, lng: s.longitude },
-                                    icon: `📍 ${String.fromCharCode(66 + index)}`, // B, C, D...
+                                    icon: `📍 ${String.fromCharCode(66 + index)} `, // B, C, D...
                                     size: [32, 32],
                                 })),
                                 ...(destination ? [{
                                     id: 'destination',
                                     position: { lat: destination.latitude, lng: destination.longitude },
-                                    icon: `📍 ${String.fromCharCode(66 + stops.filter(s => s.latitude && s.longitude).length)}`, // Always the last letter
+                                    icon: `📍 ${String.fromCharCode(66 + stops.filter(s => s.latitude && s.longitude).length)} `, // Always the last letter
                                     size: [32, 32],
                                 }] : []),
                                 // Online drivers
                                 ...drivers.map(d => ({
-                                    id: `driver-${d.id}`,
+                                    id: `driver - ${d.id} `,
                                     position: { lat: d.location.latitude, lng: d.location.longitude },
                                     icon: '🟢🚗',
                                     size: [32, 32],
@@ -514,48 +543,6 @@ export default function RiderDashboard({ navigation }) {
                                 opacity: 0.8
                             }] : []}
                         />
-
-                        {/* Top-Tier Map Overlay: Zoom & Recenter Controls */}
-                        <View style={styles.mapControls}>
-                            <TouchableOpacity
-                                style={styles.mapControlButton}
-                                onPress={() => {
-                                    const nextZoom = Math.min(mapZoom + 1, 19);
-                                    setMapZoom(nextZoom);
-                                    mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
-                                }}
-                            >
-                                <Text style={styles.mapControlText}>+</Text>
-                            </TouchableOpacity>
-                            <View style={styles.controlDivider} />
-                            <TouchableOpacity
-                                style={styles.mapControlButton}
-                                onPress={() => {
-                                    const nextZoom = Math.max(mapZoom - 1, 5);
-                                    setMapZoom(nextZoom);
-                                    mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
-                                }}
-                            >
-                                <Text style={styles.mapControlText}>−</Text>
-                            </TouchableOpacity>
-                            <View style={styles.controlDivider} />
-                            <TouchableOpacity
-                                style={styles.mapControlButton}
-                                onPress={async () => {
-                                    try {
-                                        const loc = await getCurrentLocation();
-                                        setMyLocation(loc);
-                                        if (mapRef.current) {
-                                            mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16);`);
-                                        }
-                                    } catch (error) {
-                                        Alert.alert('Error', 'No se pudo obtener la ubicación');
-                                    }
-                                }}
-                            >
-                                <Text style={{ fontSize: 20 }}>🎯</Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
                 )}
 
@@ -568,7 +555,7 @@ export default function RiderDashboard({ navigation }) {
                                 placeholder={
                                     activeSearchIndex === -2 ? "📍 ¿Dónde te recojo?" :
                                         activeSearchIndex === -1 ? "🏁 ¿A dónde vamos?" :
-                                            `📍 Agregar Parada ${activeSearchIndex + 1}`
+                                            `📍 Agregar Parada ${activeSearchIndex + 1} `
                                 }
                                 placeholderTextColor={COLORS.textMuted}
                                 value={searchQuery}
@@ -586,6 +573,49 @@ export default function RiderDashboard({ navigation }) {
                             )}
                         </View>
 
+                        {/* Controles de Mapa Horizontales (Surgical Fix L7+) */}
+                        <View style={styles.horizontalControls}>
+                            <View style={styles.hControlGroup}>
+                                <TouchableOpacity
+                                    style={styles.hButton}
+                                    onPress={() => {
+                                        const nextZoom = Math.min(mapZoom + 1, 19);
+                                        setMapZoom(nextZoom);
+                                        mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                    }}
+                                >
+                                    <Text style={styles.hButtonText}>+</Text>
+                                </TouchableOpacity>
+                                <View style={styles.hDivider} />
+                                <TouchableOpacity
+                                    style={styles.hButton}
+                                    onPress={() => {
+                                        const nextZoom = Math.max(mapZoom - 1, 5);
+                                        setMapZoom(nextZoom);
+                                        mapRef.current?.injectJavaScript(`window.map.setZoom(${nextZoom})`);
+                                    }}
+                                >
+                                    <Text style={styles.hButtonText}>−</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.hGpsButton}
+                                onPress={async () => {
+                                    try {
+                                        const loc = await getCurrentLocation();
+                                        setMyLocation(loc);
+                                        if (mapRef.current) {
+                                            mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16); `);
+                                        }
+                                    } catch (error) {
+                                        Alert.alert('Error', 'No se pudo obtener la ubicación');
+                                    }
+                                }}
+                            >
+                                <Text style={{ fontSize: moderateScale(20) }}>🎯</Text>
+                            </TouchableOpacity>
+                        </View>
+
                         {(searchResults.length > 0 || activeSearchIndex === -2) && (
                             <Animated.View style={[styles.resultsContainer, { opacity: slideAnim, maxHeight: 400 }]}>
                                 {activeSearchIndex === -2 && (
@@ -601,7 +631,7 @@ export default function RiderDashboard({ navigation }) {
                                             setSearchQuery('');
                                             setSearchResults([]);
                                             if (mapRef.current) {
-                                                mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16);`);
+                                                mapRef.current.injectJavaScript(`window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16); `);
                                             }
                                         }}
                                     >
@@ -723,8 +753,8 @@ export default function RiderDashboard({ navigation }) {
                                     setMyLocation(loc);
                                     if (mapRef.current) {
                                         mapRef.current.injectJavaScript(`
-                                        window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
-                                    `);
+window.map.flyTo([${loc.latitude}, ${loc.longitude}], 16, { animate: true, duration: 1.5 });
+`);
                                     }
                                     const addr = await reverseGeocode(loc.latitude, loc.longitude);
                                     setPickupName(addr);
@@ -1004,8 +1034,8 @@ export default function RiderDashboard({ navigation }) {
                         </Animated.View>
                     )
                 }
-            </KeyboardAvoidingView >
-        </View >
+            </KeyboardAvoidingView>
+        </View>
     );
 }
 
@@ -1613,41 +1643,46 @@ const styles = StyleSheet.create({
     },
     confirmMapPickerText: { color: '#fff', fontSize: moderateScale(18), fontWeight: 'bold' },
 
-    // Professional Map Controls
-    mapControls: {
-        position: 'absolute',
-        right: scale(15),
-        top: '35%', // Adjusted to avoid search bar overlap
+    // Professional Map Controls (Horizontal Layout L7+)
+    horizontalControls: {
+        flexDirection: 'row',
+        marginTop: 10,
+        gap: 8,
+        alignItems: 'center',
+    },
+    hControlGroup: {
+        flexDirection: 'row',
         backgroundColor: COLORS.bgCard,
-        borderRadius: RADIUS.lg,
-        padding: scale(5),
+        borderRadius: RADIUS.md,
         borderWidth: 1,
         borderColor: COLORS.border,
-        ...Platform.select({
-            ios: {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: scale(4) },
-                shadowOpacity: 0.3,
-                shadowRadius: scale(5),
-            },
-            android: { elevation: 10 },
-        }),
+        elevation: 5,
+        overflow: 'hidden',
     },
-    mapControlButton: {
+    hButton: {
         width: scale(44),
         height: scale(44),
         justifyContent: 'center',
         alignItems: 'center',
     },
-    mapControlText: {
+    hButtonText: {
         fontSize: moderateScale(24),
         color: COLORS.textPrimary,
         fontWeight: '300',
     },
-    controlDivider: {
-        height: 1,
-        width: '70%',
-        alignSelf: 'center',
+    hDivider: {
+        width: 1,
+        height: '60%',
         backgroundColor: COLORS.border,
+        alignSelf: 'center',
+    },
+    hGpsButton: {
+        width: scale(44),
+        height: scale(44),
+        backgroundColor: COLORS.accent,
+        borderRadius: RADIUS.md,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 5,
     },
 });
